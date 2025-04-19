@@ -99,7 +99,7 @@ class _LoginPageState extends State<LoginPage> {
                   onPressed: () {
                     Navigator.pushNamed(context, '/cadastro');
                   },
-                  child: const Text('Cadastrar'),
+                  child: const Text('Ainda não tem cadastro? Clique aqui.'),
                 ),
                 TextButton(
                   onPressed: () {
