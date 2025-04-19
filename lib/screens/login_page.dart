@@ -34,7 +34,7 @@ class _LoginPageState extends State<LoginPage> {
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
-      final token = data['token']; // confirme se é 'token' ou 'access_token'
+      final token = data['token']; // confirme se é 'token' ou 'access_token .'
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('jwt_token', token);
