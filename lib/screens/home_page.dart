@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../theme/colors.dart';
 import 'package:pelada_chori/screens/votacao_page.dart';
+import 'package:pelada_chori/screens/meus_dados_page.dart';
+
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -12,11 +14,32 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   bool expandido = false;
 
-  final List<Map<String, dynamic>> botoesExtras = [
-    {'label': 'Meus Dados', 'icon': Icons.person},
-    {'label': 'Configurações', 'icon': Icons.settings},
-    {'label': 'Sair', 'icon': Icons.logout},
-  ];
+    List<Map<String, dynamic>> getBotoesExtras(BuildContext context) {
+    return [
+      {
+        'label': 'Meus Dados',
+        'icon': Icons.person,
+        'onTap': () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const MeusDadosPage()),
+        ),
+      },
+      {
+        'label': 'Configurações',
+        'icon': Icons.settings,
+        'onTap': () {
+          // implementar depois
+        },
+      },
+      {
+        'label': 'Sair',
+        'icon': Icons.logout,
+        'onTap': () {
+          // implementar depois
+        },
+      },
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -49,12 +72,8 @@ class _HomePageState extends State<HomePage> {
     final botoes = [
       ...botoesFixos,
       if (expandido)
-        ...botoesExtras.map((btn) => {
-              ...btn,
-              'onTap': () {
+        ...getBotoesExtras(context),
                 // pode personalizar ações aqui também
-              }
-            })
     ];
 
     return Scaffold(
