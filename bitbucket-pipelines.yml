@@ -10,7 +10,8 @@ pipelines:
           script:
             - flutter pub get
             - flutter build web --release --dart-define=ENV=homol
-            - apt-get update && apt-get install -y awscli
+            - apt-get update && apt-get install -y python3-pip
+            - pip3 install awscli
             - aws s3 sync build/web s3://$S3_BUCKET_HOMOL --delete
             - aws cloudfront create-invalidation --distribution-id $CLOUDFRONT_DIST_ID_HOMOL --paths "/*"
 
@@ -22,7 +23,8 @@ pipelines:
           script:
             - flutter pub get
             - flutter build web --release --dart-define=ENV=prod
-            - apt-get update && apt-get install -y awscli
+            - apt-get update && apt-get install -y python3-pip
+            - pip3 install awscli
             - aws s3 sync build/web s3://$S3_BUCKET_PROD --delete
             - aws cloudfront create-invalidation --distribution-id $CLOUDFRONT_DIST_ID_PROD --paths "/*"
 
