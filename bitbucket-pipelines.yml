@@ -10,8 +10,10 @@ pipelines:
           script:
             - flutter pub get
             - flutter build web --release --dart-define=ENV=homol
-            - apt-get update && apt-get install -y python3-pip
-            - pip3 install awscli
+            - apt-get update && apt-get install -y unzip curl
+            - curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+            - unzip awscliv2.zip
+            - ./aws/install
             - aws s3 sync build/web s3://$S3_BUCKET_HOMOL --delete
             - aws cloudfront create-invalidation --distribution-id $CLOUDFRONT_DIST_ID_HOMOL --paths "/*"
 
