@@ -1,16 +1,29 @@
 enum Environment { dev, homol, prod }
 
 class ApiConfig {
-  static const Environment env = Environment.dev;
+  static final Environment env = _getEnv();
+
+  static Environment _getEnv() {
+    const envStr = String.fromEnvironment('ENV', defaultValue: 'dev');
+    switch (envStr) {
+      case 'homol':
+        return Environment.homol;
+      case 'prod':
+        return Environment.prod;
+      default:
+        return Environment.dev;
+    }
+  }
 
   static String get baseUrl {
     switch (env) {
-      case Environment.dev:
-        return 'http://localhost:8000/api'; // para emulador Android com Laravel local
       case Environment.homol:
-        return 'https://homol.seusite.com/api';
+        return 'https://api-homol.peladadochori.com/api';
       case Environment.prod:
-        return 'https://api.seusite.com/api';
+        return 'https://api.peladadochori.com/api';
+      case Environment.dev:
+      default:
+        return 'http://localhost:8000/api';
     }
   }
 }
