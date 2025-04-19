@@ -1,0 +1,31 @@
+image: cirrusci/flutter:stable
+
+pipelines:
+  branches:
+    develop:
+      - step:
+          name: Deploy Homologação
+          caches:
+            - flutter-cache
+          script:
+            - flutter pub get
+            - flutter build web --release --dart-define=ENV=homol
+            - apt-get update && apt-get install -y awscli
+            - aws s3 sync build/web s3://$S3_BUCKET_HOMOL --delete
+            - aws cloudfront create-invalidation --distribution-id $CLOUDFRONT_DIST_ID_HOMOL --paths "/*"
+
+    main:
+      - step:
+          name: Deploy Produção
+          caches:
+            - flutter-cache
+          script:
+            - flutter pub get
+            - flutter build web --release --dart-define=ENV=prod
+            - apt-get update && apt-get install -y awscli
+            - aws s3 sync build/web s3://$S3_BUCKET_PROD --delete
+            - aws cloudfront create-invalidation --distribution-id $CLOUDFRONT_DIST_ID_PROD --paths "/*"
+
+definitions:
+  caches:
+    flutter-cache: ~/.pub-cache
