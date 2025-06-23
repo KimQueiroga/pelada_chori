@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/colors.dart';
 import 'package:pelada_chori/screens/votacao_page.dart';
 import 'package:pelada_chori/screens/meus_dados_page.dart';
+import 'package:pelada_chori/screens/sorteio_page.dart';
 
 
 class HomePage extends StatefulWidget {
@@ -57,7 +58,9 @@ class _HomePageState extends State<HomePage> {
         'label': 'Sorteio',
         'icon': Icons.format_list_bulleted,
         'onTap': () {
-          // implementar depois
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const SorteioPage()),
+            );
         },
       },
       {
