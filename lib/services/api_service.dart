@@ -225,6 +225,31 @@ class ApiService {
       throw Exception('Erro ao criar sorteios: ${res.statusCode} ${res.body}');
     }
   }
+
+  static Future<void> publicarDuplaPorIds({
+    required int sorteioId1,
+    required int sorteioId2,
+  }) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/publicar');
+    final resp = await http.post(
+      uri,
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ${await getToken()}',
+      },
+      body: jsonEncode({
+        'sorteio_id_1': sorteioId1,
+        'sorteio_id_2': sorteioId2,
+      }),
+    );
+
+    if (resp.statusCode != 200) {
+      throw Exception('Erro ao publicar: ${resp.body}');
+    }
+  }
+
+
 }
 
 
