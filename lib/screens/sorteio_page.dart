@@ -5,6 +5,8 @@ import '../models/sorteio_simplificado_model.dart';
 import 'selecionar_jogadores_page.dart';
 import 'sorteio_detalhe_page.dart';
 import '../models/sorteio_detalhe_model.dart';
+import '../../utils/app_date.dart';
+
 
 
 
@@ -41,9 +43,7 @@ class _SorteioPageState extends State<SorteioPage> {
   }
 
   Widget _buildSorteioItem(SorteioSimplificadoModel sorteio) {
-    final dataFormatada = DateFormat('dd/MM/yyyy')
-        .format(DateTime.parse(sorteio.data).toLocal());
-
+    final dataFormatada = AppDate.brFromApi(sorteio.data);
     return GestureDetector(
       onTap: () async {
         final detalhe = await ApiService.getSorteioDetalhe(sorteio.id);

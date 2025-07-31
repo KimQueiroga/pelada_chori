@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/sorteio_detalhe_model.dart';
 import '../services/api_service.dart';
+import '../../utils/app_date.dart';
+
 
 class RascunhosDiaPage extends StatefulWidget {
   const RascunhosDiaPage({Key? key}) : super(key: key);
@@ -71,7 +73,7 @@ class _RascunhosDiaPageState extends State<RascunhosDiaPage> {
 
   Widget _cardSorteio(SorteioDetalhe s) {
     final dataFmt =
-        DateFormat('dd/MM/yyyy').format(DateTime.parse(s.data).toLocal());
+        AppDate.brFromApi(s.data);
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
