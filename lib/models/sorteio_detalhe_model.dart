@@ -9,6 +9,9 @@ class SorteioDetalhe {
   final int numero;
   final List<SorteioTime> times;
 
+  // NOVO: quando vier da rota /votacao-ativa
+  final int? votosCount;
+
   SorteioDetalhe({
     required this.id,
     required this.descricao,
@@ -17,6 +20,7 @@ class SorteioDetalhe {
     required this.data,
     required this.numero,
     required this.times,
+    this.votosCount,
   });
 
   factory SorteioDetalhe.fromJson(Map<String, dynamic> json) {
@@ -30,6 +34,7 @@ class SorteioDetalhe {
       times: (json['times'] as List<dynamic>)
           .map((t) => SorteioTime.fromJson(t))
           .toList(),
+      votosCount: json['votos_count'] as int?, // pode vir nulo
     );
   }
 }
