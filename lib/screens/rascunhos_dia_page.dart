@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import '../../services/api_service.dart';
 import '../models/sorteio_detalhe_model.dart';
-import '../services/api_service.dart';
+import '../utils/app_date.dart';
+import '../screens/sorteio_page.dart';
 
 class RascunhosDiaPage extends StatefulWidget {
   const RascunhosDiaPage({Key? key}) : super(key: key);
@@ -12,7 +13,11 @@ class RascunhosDiaPage extends StatefulWidget {
 
 class _RascunhosDiaPageState extends State<RascunhosDiaPage> {
   bool _loading = true;
-  List<SorteioDetalhe> _sorteios = [];
+  String? _erro;
+
+  /// Lista de pares (cada item é a lista de sorteios de uma tentativa).
+  late List<List<SorteioDetalhe>> _pares;
+  int? _tentativaSelecionada;
 
   @override
   void initState() {
@@ -21,154 +26,312 @@ class _RascunhosDiaPageState extends State<RascunhosDiaPage> {
   }
 
   Future<void> _carregar() async {
+    setState(() {
+      _loading = true;
+      _erro = null;
+    });
+
     try {
       final lista = await ApiService.getRascunhosDoDia();
+
+      // Agrupa por tentativa (cada tentativa deve ter 2 sorteios: nº1 e nº2)
+      final Map<int, List<SorteioDetalhe>> porTentativa = {};
+      for (final s in lista) {
+        final t = s.tentativa ?? 0;
+        porTentativa.putIfAbsent(t, () => []).add(s);
+      }
+
+      // Ordena tentativas desc e monta pares (ordenando nº 1 e nº 2 por 'numero')
+      final chaves = porTentativa.keys.toList()..sort((a, b) => b.compareTo(a));
+      final pares = <List<SorteioDetalhe>>[];
+      for (final t in chaves) {
+        final arr = porTentativa[t]!..sort((a, b) => a.numero.compareTo(b.numero));
+        pares.add(arr);
+      }
+
       setState(() {
-        _sorteios = lista;
+        _pares = pares;
         _loading = false;
+        // Seleciona por padrão a tentativa mais recente se estiver completa
+        if (_pares.isNotEmpty && _pares.first.length == 2) {
+          _tentativaSelecionada = _pares.first.first.tentativa;
+        } else {
+          _tentativaSelecionada = null;
+        }
       });
     } catch (e) {
-      setState(() => _loading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro ao carregar rascunhos: $e')),
-      );
+      setState(() {
+        _erro = 'Erro ao carregar rascunhos: $e';
+        _loading = false;
+      });
     }
   }
 
-  // --- UI helpers -----------------------------------------------------------
+  Future<void> _publicarSelecionado() async {
+    if (_tentativaSelecionada == null) return;
 
-  Widget _linhaJogador(dynamic j) {
-    final foto = (j.foto ?? '').trim();
-    final apelido = (j.apelido ?? '').trim();
-    final posicao = (j.posicao ?? '').trim();
-    final numero = (j.numeroCamisa ?? '').toString();
+    // Localiza o par da tentativa selecionada
+    final par = _pares.firstWhere(
+      (p) => p.isNotEmpty && p.first.tentativa == _tentativaSelecionada,
+      orElse: () => const <SorteioDetalhe>[],
+    );
 
-    String _inicial() {
-      if (apelido.isNotEmpty) return apelido.substring(0, 1).toUpperCase();
-      return '?';
+    if (par.length != 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Esta tentativa não está completa.')),
+      );
+      return;
     }
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 14,
-            backgroundImage: foto.isNotEmpty ? NetworkImage(foto) : null,
-            child: foto.isEmpty ? Text(_inicial()) : null,
+    final id1 = par[0].id;
+    final id2 = par[1].id;
+
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Publicar dupla'),
+        content: Text(
+          'Publicar a tentativa ${par.first.tentativa} para votação?\n'
+          'Data: ${AppDate.brFromApi(par.first.data)}',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              '$numero - ${apelido.isNotEmpty ? apelido : 'Sem apelido'}  •  ${posicao.isNotEmpty ? posicao : '-'}',
-              style: const TextStyle(fontSize: 13),
-            ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Publicar'),
           ),
         ],
       ),
     );
+
+    if (confirmar != true) return;
+
+    try {
+      // Backend espera { sorteio_id_1, sorteio_id_2 }
+      await ApiService.publicarDuplaPorIds(sorteioId1: id1, sorteioId2: id2);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Dupla publicada! Abrindo sorteios ativos...')),
+      );
+          // Vá para a tela de Sorteios Ativos já recarregando a lista
+      // Use pushReplacement para substituir a tela atual,
+      // ou pushAndRemoveUntil para limpar toda a pilha.
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const SorteioPage()),
+      );
+
+      // Se preferir limpar a pilha inteira:
+      Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const SorteioPage()),
+      (route) => false,
+    );
+
+      // Recarrega (a dupla publicada deve deixar de aparecer como rascunho)
+      _carregar();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro ao publicar: $e')),
+      );
+    }
   }
 
-  Widget _cardSorteio(SorteioDetalhe s) {
-    final dataFmt =
-        DateFormat('dd/MM/yyyy').format(DateTime.parse(s.data).toLocal());
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
 
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Cabeçalho
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Rascunho • Sorteio nº ${s.numero}',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 16,
-                    ),
-                  ),
-                ),
-                Text(
-                  dataFmt,
-                  style: TextStyle(
-                    color: Theme.of(context).textTheme.bodySmall?.color,
-                  ),
-                ),
-              ],
-            ),
-            if ((s.descricao ?? '').isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Text(
-                s.descricao!,
-                style: const TextStyle(color: Colors.grey),
-              ),
-            ],
-            const SizedBox(height: 10),
+    // Título com a data: usa a do 1º card (se houver),
+    // senão usa a data de hoje — SEM toLocal().
+    final tituloData = (!_loading &&
+            _erro == null &&
+            _pares.isNotEmpty &&
+            _pares.first.isNotEmpty)
+        ? AppDate.brFromApi(_pares.first.first.data)
+        : AppDate.br(DateTime.now());
 
-            // Times
-            ...s.times.map(
-              (t) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .primaryContainer
-                        .withOpacity(.25),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          t.nome ?? 'Time',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 15,
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Rascunhos de Hoje • $tituloData'),
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _erro != null
+              ? Center(child: Text(_erro!))
+              : RefreshIndicator(
+                  onRefresh: _carregar,
+                  child: ListView.separated(
+                    padding: const EdgeInsets.only(top: 8, bottom: 100),
+                    itemCount: _pares.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (context, index) {
+                      final par = _pares[index];
+                      final tentativa = par.isNotEmpty ? par.first.tentativa : null;
+                      final completa = par.length == 2;
+
+                      return Card(
+                        margin: const EdgeInsets.symmetric(horizontal: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Cabeçalho (radio + “Tentativa X” + status)
+                              Row(
+                                children: [
+                                  Radio<int>(
+                                    value: tentativa ?? -1,
+                                    groupValue: _tentativaSelecionada,
+                                    onChanged: completa
+                                        ? (v) =>
+                                            setState(() => _tentativaSelecionada = v)
+                                        : null,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Flexible(
+                                    child: Text(
+                                      'Tentativa ${tentativa ?? '-'}',
+                                      style: theme.textTheme.titleMedium,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Chip(
+                                    label: Text(completa ? 'Par completo' : 'Incompleto'),
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+
+                              // Cartões dos sorteios desta tentativa (1 e 2)
+                              ...par
+                                  .map(_cardSorteio)
+                                  .expand((w) => [w, const SizedBox(height: 8)])
+                                  .toList()
+                                ..removeLast(),
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 6),
-                        ...t.jogadores.map(_linhaJogador),
-                      ],
-                    ),
+                      );
+                    },
                   ),
                 ),
-              ),
-            ),
-          ],
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          child: FilledButton.icon(
+            onPressed: (_tentativaSelecionada != null &&
+                    _pares.any((p) =>
+                        p.isNotEmpty &&
+                        p.first.tentativa == _tentativaSelecionada &&
+                        p.length == 2))
+                ? _publicarSelecionado
+                : null,
+            icon: const Icon(Icons.publish),
+            label: const Text('Publicar dupla selecionada'),
+          ),
         ),
       ),
     );
   }
 
-  // --- build ---------------------------------------------------------------
+  /// Card com *um sorteio* (título + data + times e jogadores).
+  Widget _cardSorteio(SorteioDetalhe s) {
+    final theme = Theme.of(context);
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Rascunhos de Hoje')),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _sorteios.isEmpty
-              ? const Center(child: Text('Nenhum rascunho encontrado para hoje.'))
-              : RefreshIndicator(
-                  onRefresh: _carregar,
-                  child: ListView.builder(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    itemCount: _sorteios.length,
-                    itemBuilder: (_, i) => _cardSorteio(_sorteios[i]),
+    return Card(
+      color: theme.colorScheme.surfaceVariant.withOpacity(.5),
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Título + data do sorteio (sem timezone)
+            Row(
+              children: [
+                Flexible(
+                  child: Text(
+                    'Rascunho • Sorteio nº ${s.numero}',
+                    style: theme.textTheme.titleMedium,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
+                const SizedBox(width: 8),
+                Text(
+                  AppDate.brFromApi(s.data),
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
+            ),
+
+            if ((s.descricao ?? '').isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                s.descricao!,
+                style: theme.textTheme.bodySmall,
+              ),
+            ],
+
+            const SizedBox(height: 10),
+
+            // Times e jogadores
+            ...s.times.map((t) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    t.nome ?? 'Time',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  ...t.jogadores.map((j) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 14,
+                            backgroundImage: (j.foto != null && j.foto!.isNotEmpty)
+                                ? NetworkImage(j.foto!)
+                                : null,
+                            child: (j.foto == null || j.foto!.isEmpty)
+                                ? const Icon(Icons.person, size: 16)
+                                : null,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '${j.numeroCamisa} - ${j.apelido}',
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            j.posicao ?? '',
+                            style: const TextStyle(color: Colors.grey),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                  const SizedBox(height: 8),
+                ],
+              );
+            }),
+          ],
+        ),
+      ),
     );
   }
 }
-
-

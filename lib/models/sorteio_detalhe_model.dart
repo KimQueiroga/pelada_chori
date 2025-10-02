@@ -7,10 +7,15 @@ class SorteioDetalhe {
   final int quantidadeJogadoresTime;
   final String data;
   final int numero;
-  final List<SorteioTime> times;
+  
 
   // NOVO: quando vier da rota /votacao-ativa
   final int? votosCount;
+  final int? tentativa;// 1, 2, 3...
+  final String? status; // 'rascunho', 'aberto', 'fechado'...
+  final bool? emVotacao;        
+
+  final List<SorteioTime> times;
 
   SorteioDetalhe({
     required this.id,
@@ -21,6 +26,9 @@ class SorteioDetalhe {
     required this.numero,
     required this.times,
     this.votosCount,
+    this.tentativa,
+    this.status,
+    this.emVotacao,
   });
 
   factory SorteioDetalhe.fromJson(Map<String, dynamic> json) {
@@ -35,6 +43,10 @@ class SorteioDetalhe {
           .map((t) => SorteioTime.fromJson(t))
           .toList(),
       votosCount: json['votos_count'] as int?, // pode vir nulo
+      tentativa: json['tentativa'],
+      status: json['status'],
+      emVotacao: json['em_votacao'] == true,
+
     );
   }
 }
