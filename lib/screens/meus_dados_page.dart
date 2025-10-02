@@ -41,7 +41,7 @@ class _MeusDadosPageState extends State<MeusDadosPage> {
           }
 
           final data = snapshot.data!;
-          final jogador = Jogador.fromJson(data['jogador']);
+          final jogador = Jogador.fromJson(data['jogador'] as Map<String, dynamic>);
           final votos = (data['notas'] as List)
               .map((e) => VotoAggregado.fromJson(e))
               .toList();
@@ -94,33 +94,36 @@ class _MeusDadosPageState extends State<MeusDadosPage> {
   }
 
   Widget _buildJogadorCard(Jogador jogador) {
-    final displayName = (jogador.apelido.isNotEmpty ? jogador.apelido : jogador.nome).trim();
-    final fotoUrl = jogador.foto; // pode ser vazio
+    final displayNameRaw =
+        (jogador.apelido.trim().isNotEmpty ? jogador.apelido : jogador.nome).trim();
+    final displayName = displayNameRaw.isNotEmpty ? displayNameRaw : 'Jogador';
+
+    // se string vazia, passamos null para o avatar (cai na inicial)
+    final String? fotoUrl = jogador.foto.trim().isEmpty ? null : jogador.foto.trim();
 
     return Card(
       child: ListTile(
         leading: Text(
-          jogador.numeroCamisa,
+          jogador.numeroCamisa.isNotEmpty ? jogador.numeroCamisa : '-',
           style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
         ),
-        title: Text(jogador.nome),
+        title: Text(jogador.nome.isNotEmpty ? jogador.nome : displayName),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              jogador.apelido,
+              jogador.apelido.isNotEmpty ? jogador.apelido : displayName,
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
             Text(
-              jogador.posicao,
+              jogador.posicao.isNotEmpty ? jogador.posicao : '—',
               style: const TextStyle(fontSize: 12, color: Colors.grey),
             ),
           ],
         ),
-        // >>> aqui substituímos o CircleAvatar + NetworkImage
         trailing: AvatarInicial(
-          displayName: displayName.isNotEmpty ? displayName : 'Jogador',
-          photoUrl: fotoUrl, // se vazio/null → mostra inicial
+          displayName: displayName,
+          photoUrl: fotoUrl, // null/'' => inicial
           radius: 24,
         ),
       ),
