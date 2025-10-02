@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
-import '../theme/colors.dart';
+import 'package:pelada_chori/screens/configuracoes_page.dart';
 import 'package:pelada_chori/screens/votacao_page.dart';
 import 'package:pelada_chori/screens/meus_dados_page.dart';
 import 'package:pelada_chori/screens/sorteio_page.dart';
 import 'package:pelada_chori/widgets/home_highlights_carousel.dart';
+import 'package:pelada_chori/screens/configuracoes_page.dart';
+
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -27,7 +29,14 @@ class _HomePageState extends State<HomePage> {
             MaterialPageRoute(builder: (_) => const MeusDadosPage()),
           ),
         },
-        {'label': 'Configurações', 'icon': Icons.settings, 'onTap': () {}},
+        {
+          'label': 'Configurações', 
+          'icon': Icons.settings, 
+          'onTap': () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ConfiguracoesPage()),
+           ),
+         }, 
         {'label': 'Sair', 'icon': Icons.logout, 'onTap': () {}},
       ];
 
