@@ -4,6 +4,7 @@ import 'dart:convert';
 import '../config/api_config.dart';
 import '../theme/colors.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:pelada_chori/shared/widgets/avatar_inicial.dart';
 
 class VotacaoPage extends StatefulWidget {
   const VotacaoPage({super.key});
@@ -151,6 +152,15 @@ class _VotacaoPageState extends State<VotacaoPage> {
 
     final jogador = jogadoresParaVotar[indiceAtual];
 
+    // Campos usados no header
+    final numeroCamisa = (jogador['numero_camisa']?.toString() ?? '').trim();
+    final nome = (jogador['nome'] ?? '').toString();
+    final apelido = (jogador['apelido'] ?? '').toString();
+    final posicao = (jogador['posicao'] ?? '').toString();
+    final displayName =
+        apelido.trim().isNotEmpty ? apelido.trim() : (nome.trim().isNotEmpty ? nome.trim() : 'Jogador');
+    final fotoUrl = (jogador['foto'] ?? jogador['fotoUrl'] ?? '').toString();
+
     return Scaffold(
       appBar: AppBar(title: const Text('Votação')),
       body: SingleChildScrollView(
@@ -170,19 +180,19 @@ class _VotacaoPageState extends State<VotacaoPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            jogador['numero_camisa']?.toString() ?? '',
+                            numeroCamisa,
                             style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
                           ),
                           Text(
-                            jogador['nome'] ?? '',
+                            nome,
                             style: const TextStyle(fontSize: 16),
                           ),
                           Text(
-                            jogador['apelido'] ?? '',
+                            displayName,
                             style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                           ),
                           Text(
-                            jogador['posicao'] ?? '',
+                            posicao,
                             style: const TextStyle(fontSize: 12, color: Colors.grey),
                           ),
                         ],
@@ -191,38 +201,40 @@ class _VotacaoPageState extends State<VotacaoPage> {
                   ),
                   Padding(
                     padding: const EdgeInsets.all(12.0),
-                    child: CircleAvatar(
+                    // >>> Substituição do default_avatar.png pelo AvatarInicial <<<
+                    child: AvatarInicial(
+                      displayName: displayName,
+                      photoUrl: fotoUrl, // vazio/null => inicial; erro de load => inicial
                       radius: 40,
-                      backgroundImage: jogador['foto'] != null
-                          ? NetworkImage(jogador['foto'])
-                          : const AssetImage('assets/default_avatar.png') as ImageProvider,
                     ),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 16),
-            ...notas.entries.map((entry) => Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  entry.key.replaceAll('_', ' ').toUpperCase(),
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                Slider(
-                  value: entry.value,
-                  min: 1,
-                  max: 5,
-                  divisions: 8,
-                  label: entry.value.toString(),
-                  onChanged: (value) {
-                    setState(() {
-                      notas[entry.key] = value;
-                    });
-                  },
-                ),
-              ],
-            )),
+            ...notas.entries.map(
+              (entry) => Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    entry.key.replaceAll('_', ' ').toUpperCase(),
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  Slider(
+                    value: entry.value,
+                    min: 1,
+                    max: 5,
+                    divisions: 8, // mantém seu padrão atual
+                    label: entry.value.toString(),
+                    onChanged: (value) {
+                      setState(() {
+                        notas[entry.key] = value;
+                      });
+                    },
+                  ),
+                ],
+              ),
+            ),
             const SizedBox(height: 20),
             enviando
                 ? const Center(child: CircularProgressIndicator())
