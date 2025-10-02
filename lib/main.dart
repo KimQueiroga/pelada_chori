@@ -2,11 +2,17 @@ import 'package:flutter/material.dart';
 import 'screens/login_page.dart';
 import 'screens/register_page.dart';
 import 'screens/home_page.dart';
-
-// novo: tema centralizado
 import 'theme/app_theme.dart';
+import 'controllers/theme_controller.dart';
+import 'services/theme_prefs.dart';
 
-void main() {
+late ThemeController themeController; // simples acesso global
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final initialMode = await ThemePrefs.load();
+  themeController = ThemeController(initialMode);
+
   runApp(const PeladaChoriApp());
 }
 
@@ -15,21 +21,22 @@ class PeladaChoriApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Pelada Chori',
-      debugShowCheckedModeBanner: false,
-
-      // aplica o tema global (Material 3 + suas cores)
-      theme: AppTheme.light,
-      darkTheme: AppTheme.dark,
-      // se preferir seguir o tema do sistema, use ThemeMode.system
-      themeMode: ThemeMode.light,
-
-      initialRoute: '/',
-      routes: {
-        '/': (_) => const LoginPage(),
-        '/cadastro': (_) => const RegisterPage(),
-        '/home': (_) => const HomePage(),
+    return AnimatedBuilder(
+      animation: themeController,
+      builder: (context, _) {
+        return MaterialApp(
+          title: 'Pelada Chori',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.light,
+          darkTheme: AppTheme.dark,
+          themeMode: themeController.mode, // ← controla o modo
+          initialRoute: '/',
+          routes: {
+            '/': (_) => const LoginPage(),
+            '/cadastro': (_) => const RegisterPage(),
+            '/home': (_) => const HomePage(),
+          },
+        );
       },
     );
   }
