@@ -3,6 +3,7 @@ import '../theme/colors.dart';
 import '../models/jogador.dart';
 import '../models/voto_aggregado.dart';
 import '../services/api_service.dart';
+import 'package:pelada_chori/shared/widgets/avatar_inicial.dart';
 
 class MeusDadosPage extends StatefulWidget {
   const MeusDadosPage({super.key});
@@ -72,12 +73,15 @@ class _MeusDadosPageState extends State<MeusDadosPage> {
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   child: Column(
                     children: [
-                      Text('Média Geral: ${media.toStringAsFixed(2)}',
-                          style: const TextStyle(
-                              fontSize: 16, fontWeight: FontWeight.bold)),
+                      Text(
+                        'Média Geral: ${media.toStringAsFixed(2)}',
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
                       const SizedBox(height: 4),
-                      Text('Soma das Médias: ${soma.toStringAsFixed(2)}',
-                          style: const TextStyle(fontSize: 14)),
+                      Text(
+                        'Soma das Médias: ${soma.toStringAsFixed(2)}',
+                        style: const TextStyle(fontSize: 14),
+                      ),
                     ],
                   ),
                 ),
@@ -90,6 +94,9 @@ class _MeusDadosPageState extends State<MeusDadosPage> {
   }
 
   Widget _buildJogadorCard(Jogador jogador) {
+    final displayName = (jogador.apelido.isNotEmpty ? jogador.apelido : jogador.nome).trim();
+    final fotoUrl = jogador.foto; // pode ser vazio
+
     return Card(
       child: ListTile(
         leading: Text(
@@ -100,15 +107,20 @@ class _MeusDadosPageState extends State<MeusDadosPage> {
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(jogador.apelido,
-                style: const TextStyle(
-                    fontWeight: FontWeight.bold, fontSize: 16)),
-            Text(jogador.posicao,
-                style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            Text(
+              jogador.apelido,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            Text(
+              jogador.posicao,
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
           ],
         ),
-        trailing: CircleAvatar(
-          backgroundImage: NetworkImage(jogador.foto),
+        // >>> aqui substituímos o CircleAvatar + NetworkImage
+        trailing: AvatarInicial(
+          displayName: displayName.isNotEmpty ? displayName : 'Jogador',
+          photoUrl: fotoUrl, // se vazio/null → mostra inicial
           radius: 24,
         ),
       ),

@@ -13,7 +13,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  bool expandido = false;
+  bool expandido = true;
 
     List<Map<String, dynamic>> getBotoesExtras(BuildContext context) {
     return [
