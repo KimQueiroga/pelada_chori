@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:pelada_chori/theme/colors.dart';
 
 class StatEntry {
   final String nome;
@@ -40,7 +39,7 @@ class _HomeHighlightsCarouselState extends State<HomeHighlightsCarousel> {
     StatEntry('Leo', 3),
   ];
 
-  // === breakpoints “M3-ish” para responsividade ===
+  // breakpoints responsivos
   double _fractionForWidth(double w) {
     if (w < 360) return 0.92;
     if (w < 480) return 0.88;
@@ -86,7 +85,7 @@ class _HomeHighlightsCarouselState extends State<HomeHighlightsCarousel> {
                 controller: controller,
                 onPageChanged: (i) => setState(() => _index = i),
                 allowImplicitScrolling: true,
-                padEnds: false, // mostra “peek” do próximo card
+                padEnds: false,
                 clipBehavior: Clip.none,
                 itemCount: cards.length,
                 itemBuilder: (_, i) => Padding(
@@ -123,21 +122,24 @@ class _Top5Card extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
     final max = (items.isEmpty) ? 1 : items.map((e) => e.valor).reduce((a, b) => a > b ? a : b);
     final itemExtent = itemExtentOverride ?? 30.0;
 
-    final Color primary = AppColors.primary;
+    final Color primary = cs.primary;
     final Color track = primary.withOpacity(0.18);
     final Color badgeBg = primary.withOpacity(0.12);
-    final Color cardBg = AppColors.background.withOpacity(0.90);
-    final Color textStrong = AppColors.textDark;
+    final Color cardBg = Theme.of(context).cardColor;
+    final Color textStrong = cs.onSurface;
 
     return Card(
       elevation: 1.5,
       color: cardBg,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: AppColors.primary.withOpacity(0.25)),
+        side: BorderSide(color: cs.primary.withOpacity(0.20)),
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
@@ -149,10 +151,10 @@ class _Top5Card extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w800, color: textStrong),
+                  style: textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: textStrong,
+                  ),
                 ),
                 const Spacer(),
                 TextButton(
@@ -193,10 +195,10 @@ class _Top5Card extends StatelessWidget {
                         ),
                         child: Text(
                           '${i + 1}',
-                          style: Theme.of(context)
-                              .textTheme
-                              .labelMedium
-                              ?.copyWith(fontWeight: FontWeight.w800, color: textStrong),
+                          style: textTheme.labelMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: textStrong,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -207,10 +209,10 @@ class _Top5Card extends StatelessWidget {
                           e.nome,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodyMedium
-                              ?.copyWith(fontWeight: FontWeight.w600, color: textStrong),
+                          style: textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: textStrong,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -243,10 +245,10 @@ class _Top5Card extends StatelessWidget {
                         ),
                         child: Text(
                           '${e.valor}',
-                          style: Theme.of(context)
-                              .textTheme
-                              .labelLarge
-                              ?.copyWith(fontWeight: FontWeight.w800, color: textStrong),
+                          style: textTheme.labelLarge?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: textStrong,
+                          ),
                         ),
                       ),
                     ],
@@ -268,7 +270,7 @@ class _Dots extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = AppColors.primary;
+    final c = Theme.of(context).colorScheme.primary;
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: List.generate(count, (i) {

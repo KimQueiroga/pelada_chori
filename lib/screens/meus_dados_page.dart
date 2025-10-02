@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../theme/colors.dart';
 import '../models/jogador.dart';
 import '../models/voto_aggregado.dart';
 import '../services/api_service.dart';
@@ -23,11 +22,12 @@ class _MeusDadosPageState extends State<MeusDadosPage> {
 
   @override
   Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+
     return Scaffold(
+      // ✔️ sem override de cores → herda do AppTheme (AppBar branca, título escuro)
       appBar: AppBar(
         title: const Text('Meus Dados'),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
       ),
       body: FutureBuilder<Map<String, dynamic>>(
         future: _dadosFuturos,
@@ -62,25 +62,25 @@ class _MeusDadosPageState extends State<MeusDadosPage> {
                     itemBuilder: (context, index) {
                       final item = votos[index];
                       return ListTile(
-                        title: Text(item.nome),
-                        trailing: Text(item.media.toStringAsFixed(2)),
+                        title: Text(item.nome, style: textTheme.bodyMedium),
+                        trailing: Text(item.media.toStringAsFixed(2), style: textTheme.bodyMedium),
                       );
                     },
                   ),
                 ),
-                const Divider(thickness: 2),
+                const Divider(), // usa DividerTheme do AppTheme
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   child: Column(
                     children: [
                       Text(
                         'Média Geral: ${media.toStringAsFixed(2)}',
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         'Soma das Médias: ${soma.toStringAsFixed(2)}',
-                        style: const TextStyle(fontSize: 14),
+                        style: textTheme.bodyMedium,
                       ),
                     ],
                   ),
@@ -94,30 +94,33 @@ class _MeusDadosPageState extends State<MeusDadosPage> {
   }
 
   Widget _buildJogadorCard(Jogador jogador) {
+    final textTheme = Theme.of(context).textTheme;
     final displayNameRaw =
         (jogador.apelido.trim().isNotEmpty ? jogador.apelido : jogador.nome).trim();
     final displayName = displayNameRaw.isNotEmpty ? displayNameRaw : 'Jogador';
 
-    // se string vazia, passamos null para o avatar (cai na inicial)
     final String? fotoUrl = jogador.foto.trim().isEmpty ? null : jogador.foto.trim();
 
     return Card(
       child: ListTile(
         leading: Text(
           jogador.numeroCamisa.isNotEmpty ? jogador.numeroCamisa : '-',
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
         ),
-        title: Text(jogador.nome.isNotEmpty ? jogador.nome : displayName),
+        title: Text(
+          jogador.nome.isNotEmpty ? jogador.nome : displayName,
+          style: textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
+        ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               jogador.apelido.isNotEmpty ? jogador.apelido : displayName,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
             ),
             Text(
               jogador.posicao.isNotEmpty ? jogador.posicao : '—',
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
+              style: textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6)),
             ),
           ],
         ),

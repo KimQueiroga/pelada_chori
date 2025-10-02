@@ -33,6 +33,8 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     final List<Map<String, dynamic>> botoesFixos = [
       {
         'label': 'Votação',
@@ -57,10 +59,7 @@ class _HomePageState extends State<HomePage> {
     final botoes = [...botoesFixos, if (expandido) ...getBotoesExtras(context)];
 
     return Scaffold(
-      backgroundColor: AppColors.background, // <- fundo do app
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
         leadingWidth: 56,
         leading: Padding(
           padding: const EdgeInsets.all(8.0),
@@ -71,10 +70,10 @@ class _HomePageState extends State<HomePage> {
                 Image.asset('assets/logo_pelada.png', fit: BoxFit.contain),
           ),
         ),
-        actions: const [
+        actions: [
           Padding(
-            padding: EdgeInsets.all(16.0),
-            child: Icon(Icons.menu, color: AppColors.primary),
+            padding: const EdgeInsets.all(16.0),
+            child: Icon(Icons.menu, color: cs.primary),
           ),
         ],
       ),
@@ -96,16 +95,16 @@ class _HomePageState extends State<HomePage> {
                     onTap: btn['onTap'],
                     child: Container(
                       decoration: BoxDecoration(
-                        border: Border.all(color: AppColors.primary),
+                        border: Border.all(color: cs.primary),
                         borderRadius: BorderRadius.circular(12),
-                        color: AppColors.background, // mantém identidade visual
+                        color: Theme.of(context).cardColor, // integra com tema
                       ),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(btn['icon'], size: 30, color: AppColors.textDark),
+                          Icon(btn['icon'], size: 30, color: cs.onSurface),
                           const SizedBox(height: 8),
-                          Text(btn['label'], style: const TextStyle(color: AppColors.textDark)),
+                          Text(btn['label'], style: TextStyle(color: cs.onSurface)),
                         ],
                       ),
                     ),
@@ -118,7 +117,7 @@ class _HomePageState extends State<HomePage> {
                 child: IconButton(
                   onPressed: () => setState(() => expandido = !expandido),
                   iconSize: 28,
-                  color: AppColors.primary,
+                  color: cs.primary,
                   icon: Icon(expandido ? Icons.expand_less : Icons.expand_more),
                 ),
               ),
@@ -126,17 +125,12 @@ class _HomePageState extends State<HomePage> {
               const SizedBox(height: 8),
 
               // TÍTULO + CARROSSEL
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Destaques do mês',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleLarge
-                        ?.copyWith(fontWeight: FontWeight.w800, color: AppColors.textDark),
-                  ),
-                ],
+              Text(
+                'Destaques do mês',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleLarge
+                    ?.copyWith(fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 8),
               const HomeHighlightsCarousel(),

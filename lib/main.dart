@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'screens/login_page.dart';
 import 'screens/register_page.dart';
 import 'screens/home_page.dart';
-import 'theme/colors.dart';
+
+// novo: tema centralizado
+import 'theme/app_theme.dart';
 
 void main() {
   runApp(const PeladaChoriApp());
@@ -15,11 +17,14 @@ class PeladaChoriApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Pelada Chori',
-      theme: ThemeData(
-        primaryColor: AppColors.primary,
-        scaffoldBackgroundColor: AppColors.background,
-        useMaterial3: true,
-      ),
+      debugShowCheckedModeBanner: false,
+
+      // aplica o tema global (Material 3 + suas cores)
+      theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
+      // se preferir seguir o tema do sistema, use ThemeMode.system
+      themeMode: ThemeMode.light,
+
       initialRoute: '/',
       routes: {
         '/': (_) => const LoginPage(),
