@@ -32,14 +32,17 @@ flutter:
 
 # Configuração do gerador de ícones
 flutter_launcher_icons:
-  image_path: assets/logo_pelada.png  # use uma imagem quadrada (ideal 512x512)
+  image_path: assets/logo_pelada.png
   web:
     generate: true
     image_path: assets/logo_pelada.png
     background_color: "#ffffff"
     theme_color: "#ff6a00"
-  android: false   # mude para true se quiser gerar também
+  android: false
   ios: false
-  macos: false
-  windows: false
-  linux: false
+  windows:
+    generate: false
+  macos:
+    generate: false
+  linux:
+    generate: false
