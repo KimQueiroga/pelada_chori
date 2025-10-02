@@ -4,7 +4,6 @@ import 'package:pelada_chori/screens/votacao_page.dart';
 import 'package:pelada_chori/screens/meus_dados_page.dart';
 import 'package:pelada_chori/screens/sorteio_page.dart';
 
-
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -15,7 +14,10 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   bool expandido = true;
 
-    List<Map<String, dynamic>> getBotoesExtras(BuildContext context) {
+  static const String kLogoUrl =
+      'https://dapis-fotos-publicas.s3.us-east-2.amazonaws.com/logo_pelada.png';
+
+  List<Map<String, dynamic>> getBotoesExtras(BuildContext context) {
     return [
       {
         'label': 'Meus Dados',
@@ -44,7 +46,6 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    // Definimos os botões fixos aqui dentro para acessar o context
     final List<Map<String, dynamic>> botoesFixos = [
       {
         'label': 'Votacao',
@@ -58,9 +59,9 @@ class _HomePageState extends State<HomePage> {
         'label': 'Sorteio',
         'icon': Icons.format_list_bulleted,
         'onTap': () {
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const SorteioPage()),
-            );
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const SorteioPage()),
+          );
         },
       },
       {
@@ -74,18 +75,25 @@ class _HomePageState extends State<HomePage> {
 
     final botoes = [
       ...botoesFixos,
-      if (expandido)
-        ...getBotoesExtras(context),
-                // pode personalizar ações aqui também
+      if (expandido) ...getBotoesExtras(context),
     ];
 
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
+        leadingWidth: 56,
         leading: Padding(
           padding: const EdgeInsets.all(8.0),
-          child: Image.asset('../assets/logo_pelada.png'), // ajuste o caminho se necessário
+          // Logo via URL pública + fallback para asset local
+          child: Image.network(
+            kLogoUrl,
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => Image.asset(
+              'assets/logo_pelada.png', // fallback local
+              fit: BoxFit.contain,
+            ),
+          ),
         ),
         actions: const [
           Padding(
@@ -124,11 +132,7 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
           GestureDetector(
-            onTap: () {
-              setState(() {
-                expandido = !expandido;
-              });
-            },
+            onTap: () => setState(() => expandido = !expandido),
             child: Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: Icon(
