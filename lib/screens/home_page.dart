@@ -5,6 +5,8 @@ import 'package:pelada_chori/screens/meus_dados_page.dart';
 import 'package:pelada_chori/screens/sorteio_page.dart';
 import 'package:pelada_chori/widgets/home_highlights_carousel.dart';
 import 'package:pelada_chori/screens/configuracoes_page.dart';
+import 'package:pelada_chori/services/auth_service.dart'; // <-- novo
+
 
 
 class HomePage extends StatefulWidget {
@@ -13,6 +15,17 @@ class HomePage extends StatefulWidget {
   @override
   State<HomePage> createState() => _HomePageState();
 }
+
+void _showEmBreve(BuildContext context) {
+  showDialog(
+    context: context,
+    builder: (_) => const AlertDialog(
+      title: Text('Ops!'),
+      content: Text('Funcionalidade será disponibilizada em breve...'),
+    ),
+  );
+}
+
 
 class _HomePageState extends State<HomePage> {
   bool expandido = true;
@@ -37,8 +50,63 @@ class _HomePageState extends State<HomePage> {
             MaterialPageRoute(builder: (_) => const ConfiguracoesPage()),
            ),
          }, 
-        {'label': 'Sair', 'icon': Icons.logout, 'onTap': () {}},
+        {
+          'label': 'Sair', 
+          'icon': Icons.logout, 
+          'onTap': () => _confirmarLogout(context),},
       ];
+  Future<void> _confirmarLogout(BuildContext context) async {
+  final cs = Theme.of(context).colorScheme;
+
+  final confirmou = await showDialog<bool>(
+    context: context,
+    barrierDismissible: true,
+    builder: (_) => AlertDialog(
+      title: const Text('Sair'),
+      content: const Text('Deseja realmente sair da sua conta?'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, true),
+          style: FilledButton.styleFrom(
+            backgroundColor: cs.errorContainer,
+            foregroundColor: cs.onErrorContainer,
+          ),
+          child: const Text('Sair'),
+        ),
+      ],
+    ),
+  );
+
+  if (confirmou == true) {
+    // 1) abre loading modal
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    // 2) faz logout (chama backend + limpa token)
+    await AuthService.logout();
+
+    // 3) fecha o loading
+    if (context.mounted) {
+      Navigator.of(context, rootNavigator: true).pop(); // fecha o diálogo de loading
+    }
+
+    // 4) navega para login limpando a pilha
+        if (context.mounted) {
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          '/',
+          (route) => false,
+          arguments: {'justLoggedOut': true},
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -62,7 +130,11 @@ class _HomePageState extends State<HomePage> {
           );
         },
       },
-      {'label': 'Estatísticas', 'icon': Icons.show_chart, 'onTap': () {}},
+      {
+        'label': 'Estatísticas', 
+        'icon': Icons.show_chart, 
+        'onTap': () => _showEmBreve(context),
+        },
     ];
 
     final botoes = [...botoesFixos, if (expandido) ...getBotoesExtras(context)];

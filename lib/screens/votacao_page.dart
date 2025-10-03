@@ -35,6 +35,24 @@ class _VotacaoPageState extends State<VotacaoPage> {
     carregarJogadoresParaVotar();
   }
 
+  // ---------- helpers ----------
+  void _showSnack(String message, {bool success = true}) {
+    final cs = Theme.of(context).colorScheme;
+    // garante que um novo snack não empilhe no anterior
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor:
+              success ? cs.primaryContainer : cs.errorContainer,
+          // em cores claras/esc    uras alterna bem:
+          action: null,
+        ),
+      );
+  }
+
   Future<void> carregarJogadoresParaVotar() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('jwt_token') ?? '';
@@ -56,9 +74,7 @@ class _VotacaoPageState extends State<VotacaoPage> {
       });
     } else {
       setState(() => loading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Erro ao carregar jogadores')),
-      );
+      _showSnack('Erro ao carregar jogadores', success: false);
     }
   }
 
@@ -68,6 +84,10 @@ class _VotacaoPageState extends State<VotacaoPage> {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('jwt_token') ?? '';
     final jogador = jogadoresParaVotar[indiceAtual];
+
+    final displayName = ((jogador['apelido'] ?? '') as String).trim().isNotEmpty
+        ? (jogador['apelido'] as String).trim()
+        : ((jogador['nome'] ?? '') as String).trim();
 
     final response = await http.post(
       Uri.parse('${ApiConfig.baseUrl}/votos'),
@@ -86,10 +106,14 @@ class _VotacaoPageState extends State<VotacaoPage> {
       setState(() {
         jogadoresParaVotar.removeAt(indiceAtual);
         enviando = false;
+        // se quiser ir para o próximo automaticamente, indiceAtual já aponta para o 0 do restante
       });
 
+      // feedback imediato
+      _showSnack('Voto enviado para ${displayName.isEmpty ? "jogador" : displayName}');
+
       if (jogadoresParaVotar.isEmpty) {
-        showDialog(
+        await showDialog(
           context: context,
           builder: (_) => AlertDialog(
             title: const Text('Obrigado!'),
@@ -101,20 +125,27 @@ class _VotacaoPageState extends State<VotacaoPage> {
               ),
             ],
           ),
-        ).then((_) => Navigator.pop(context));
+        );
+        if (mounted) Navigator.pop(context);
       }
     } else {
       setState(() => enviando = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Erro ao enviar voto')),
-      );
+      _showSnack('Erro ao enviar voto', success: false);
     }
   }
 
   void pularJogador() {
+    // pega o nome antes de remover para mostrar no snackbar
+    final jogador = jogadoresParaVotar[indiceAtual];
+    final displayName = ((jogador['apelido'] ?? '') as String).trim().isNotEmpty
+        ? (jogador['apelido'] as String).trim()
+        : ((jogador['nome'] ?? '') as String).trim();
+
     setState(() {
       jogadoresParaVotar.removeAt(indiceAtual);
     });
+
+    _showSnack('Você pulou ${displayName.isEmpty ? "o jogador" : displayName}');
 
     if (jogadoresParaVotar.isEmpty) {
       showDialog(
@@ -129,10 +160,13 @@ class _VotacaoPageState extends State<VotacaoPage> {
             ),
           ],
         ),
-      ).then((_) => Navigator.pop(context));
+      ).then((_) {
+        if (mounted) Navigator.pop(context);
+      });
     }
   }
 
+  // ---------- UI ----------
   @override
   Widget build(BuildContext context) {
     if (loading) {
@@ -201,7 +235,7 @@ class _VotacaoPageState extends State<VotacaoPage> {
                   ),
                   Padding(
                     padding: const EdgeInsets.all(12.0),
-                    // >>> Substituição do default_avatar.png pelo AvatarInicial <<<
+                    // Avatar com inicial quando não há foto
                     child: AvatarInicial(
                       displayName: displayName,
                       photoUrl: fotoUrl, // vazio/null => inicial; erro de load => inicial
@@ -224,7 +258,7 @@ class _VotacaoPageState extends State<VotacaoPage> {
                     value: entry.value,
                     min: 1,
                     max: 5,
-                    divisions: 8, // mantém seu padrão atual
+                    divisions: 8,
                     label: entry.value.toString(),
                     onChanged: (value) {
                       setState(() {

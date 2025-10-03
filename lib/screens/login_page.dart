@@ -18,6 +18,31 @@ class _LoginPageState extends State<LoginPage> {
   final senhaController = TextEditingController();
   bool loading = false;
 
+  // evita mostrar o snackbar mais de uma vez
+  bool _logoutSnackShown = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_logoutSnackShown) return;
+
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is Map && args['justLoggedOut'] == true) {
+      _logoutSnackShown = true;
+      // aguarda o primeiro frame para garantir que o Scaffold existe
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Sessão encerrada com sucesso.'),
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      });
+    }
+  }
+
   Future<void> login() async {
     setState(() => loading = true);
 
@@ -25,7 +50,7 @@ class _LoginPageState extends State<LoginPage> {
       Uri.parse('${ApiConfig.baseUrl}/login'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
-        'email': emailController.text,
+        'email': emailController.text.trim(),
         'password': senhaController.text,
       }),
     );
@@ -33,17 +58,19 @@ class _LoginPageState extends State<LoginPage> {
     setState(() => loading = false);
 
     if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      final token = data['token']; // confirme se é 'token' ou 'access_token'
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final token = data['token']; // backend retorna "token"
 
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('jwt_token', token);
+      await prefs.setString('jwt_token', token as String);
 
+      if (!mounted) return;
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const HomePage()),
       );
     } else {
+      if (!mounted) return;
       showDialog(
         context: context,
         builder: (_) => AlertDialog(
@@ -58,6 +85,13 @@ class _LoginPageState extends State<LoginPage> {
         ),
       );
     }
+  }
+
+  @override
+  void dispose() {
+    emailController.dispose();
+    senhaController.dispose();
+    super.dispose();
   }
 
   @override
@@ -96,14 +130,12 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                 const SizedBox(height: 10),
                 TextButton(
-                  onPressed: () {
-                    Navigator.pushNamed(context, '/cadastro');
-                  },
+                  onPressed: () => Navigator.pushNamed(context, '/cadastro'),
                   child: const Text('Ainda não tem cadastro? Clique aqui.'),
                 ),
                 TextButton(
                   onPressed: () {
-                    // Implemente depois
+                    // TODO: implementar
                   },
                   child: const Text('Esqueci minha senha'),
                 ),
