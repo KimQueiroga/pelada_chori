@@ -4,6 +4,7 @@ import 'screens/register_page.dart';
 import 'screens/home_page.dart';
 import 'theme/app_theme.dart';
 import 'controllers/theme_controller.dart';
+import 'screens/splash_page.dart';   // <- novo
 import 'services/theme_prefs.dart';
 
 late ThemeController themeController; // simples acesso global
@@ -30,8 +31,9 @@ class PeladaChoriApp extends StatelessWidget {
           theme: AppTheme.light,
           darkTheme: AppTheme.dark,
           themeMode: themeController.mode, // ← controla o modo
-          initialRoute: '/',
+          initialRoute: '/splash',
           routes: {
+            '/splash': (_) => const SplashPage(),
             '/': (_) => const LoginPage(),
             '/cadastro': (_) => const RegisterPage(),
             '/home': (_) => const HomePage(),
