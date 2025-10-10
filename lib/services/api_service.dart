@@ -226,30 +226,55 @@ class ApiService {
     }
   }
 
-  static Future<void> publicarDuplaPorIds({
-    required int sorteioId1,
-    required int sorteioId2,
-  }) async {
-    final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/publicar');
-    final resp = await http.post(
-      uri,
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ${await getToken()}',
-      },
-      body: jsonEncode({
-        'sorteio_id_1': sorteioId1,
-        'sorteio_id_2': sorteioId2,
-      }),
-    );
+    static Future<void> publicarDuplaPorIds({
+      required int sorteioId1,
+      required int sorteioId2,
+    }) async {
+      final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/publicar');
+      final resp = await http.post(
+        uri,
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${await getToken()}',
+        },
+        body: jsonEncode({
+          'sorteio_id_1': sorteioId1,
+          'sorteio_id_2': sorteioId2,
+        }),
+      );
 
-    if (resp.statusCode != 200) {
-      throw Exception('Erro ao publicar: ${resp.body}');
+      if (resp.statusCode != 200) {
+        throw Exception('Erro ao publicar: ${resp.body}');
+      }
     }
-  }
+    // lib/services/api_service.dart
+    static Future<bool> updateMeusDados(Map<String, dynamic> payload) async {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final token = prefs.getString('jwt_token') ?? '';
 
+        final resp = await http.put(
+          Uri.parse('${ApiConfig.baseUrl}/meus-dados'),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: jsonEncode(payload),
+        );
 
+        if (resp.statusCode == 200) {
+          return true;
+        } else {
+          // opcional: log/print do body para debug
+          // print(resp.body);
+          return false;
+        }
+      } catch (_) {
+        return false;
+      }
+    }
 }
 
 
