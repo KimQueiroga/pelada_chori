@@ -3,6 +3,7 @@ import '../models/jogador.dart';
 import '../models/voto_aggregado.dart';
 import '../services/api_service.dart';
 import 'package:pelada_chori/shared/widgets/avatar_inicial.dart';
+import 'package:pelada_chori/screens/editar_meus_dados_sheet.dart';
 
 class MeusDadosPage extends StatefulWidget {
   const MeusDadosPage({super.key});
@@ -20,15 +21,73 @@ class _MeusDadosPageState extends State<MeusDadosPage> {
     _dadosFuturos = ApiService.getMeusDados();
   }
 
+  Future<void> _abrirEdicao() async {
+    // 1) pega os dados atuais para popular o form
+    final data = await _dadosFuturos;
+    if (!mounted) return;
+
+    final jogador = Jogador.fromJson(data['jogador']);
+
+    // 2) abre o bottom sheet
+    final outcome = await showModalBottomSheet<Object?>(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => EditarMeusDadosSheet(jogador: jogador),
+    );
+
+    if (!mounted || outcome == null) return;
+
+    // 3) sucesso → recarrega Future de forma SÍNCRONA dentro do setState
+    if (outcome == true) {
+      final fresh = ApiService.getMeusDados();
+      setState(() {
+        _dadosFuturos = fresh; // <- síncrono, sem 'await' e sem 'async'
+      });
+
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          const SnackBar(content: Text('Dados atualizados com sucesso!')),
+        );
+    }
+
+    // 4) erro vindo do sheet
+    if (outcome is String && outcome.isNotEmpty) {
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(SnackBar(content: Text(outcome)));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
-      // ✔️ sem override de cores → herda do AppTheme (AppBar branca, título escuro)
       appBar: AppBar(
         title: const Text('Meus Dados'),
+        actions: [
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              if (value == 'editar') _abrirEdicao();
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: 'editar',
+                child: Row(
+                  children: [Icon(Icons.edit), SizedBox(width: 8), Text('Editar meus dados')],
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
+
       body: FutureBuilder<Map<String, dynamic>>(
         future: _dadosFuturos,
         builder: (context, snapshot) {
@@ -38,6 +97,10 @@ class _MeusDadosPageState extends State<MeusDadosPage> {
 
           if (snapshot.hasError) {
             return Center(child: Text('Erro: ${snapshot.error}'));
+          }
+
+          if (!snapshot.hasData) {
+            return const Center(child: Text('Sem dados.'));
           }
 
           final data = snapshot.data!;
@@ -68,7 +131,7 @@ class _MeusDadosPageState extends State<MeusDadosPage> {
                     },
                   ),
                 ),
-                const Divider(), // usa DividerTheme do AppTheme
+                const Divider(),
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   child: Column(
@@ -120,13 +183,15 @@ class _MeusDadosPageState extends State<MeusDadosPage> {
             ),
             Text(
               jogador.posicao.isNotEmpty ? jogador.posicao : '—',
-              style: textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6)),
+              style: textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+              ),
             ),
           ],
         ),
         trailing: AvatarInicial(
           displayName: displayName,
-          photoUrl: fotoUrl, // null/'' => inicial
+          photoUrl: fotoUrl,
           radius: 24,
         ),
       ),
