@@ -5,6 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../config/api_config.dart';
 import '../theme/colors.dart';
 import 'home_page.dart';
+import 'package:pelada_chori/screens/forgot_password_page.dart';
+
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -135,7 +137,10 @@ class _LoginPageState extends State<LoginPage> {
                 ),
                 TextButton(
                   onPressed: () {
-                    // TODO: implementar
+                    Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const ForgotPasswordPage()),
+                    );
                   },
                   child: const Text('Esqueci minha senha'),
                 ),
