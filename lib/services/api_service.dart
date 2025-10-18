@@ -275,6 +275,67 @@ class ApiService {
         return false;
       }
     }
+
+    
+    // lib/services/api_service.dart (trechos relevantes)
+
+    static Future<bool> requestPasswordReset(String email) async {
+      try {
+        final r = await http.post(
+          Uri.parse('${ApiConfig.baseUrl}/password/forgot'),
+          headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+          body: jsonEncode({'email': email}),
+        );
+        return r.statusCode == 200;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    /// 2) Verifica o código e devolve o reset_token (string) ou null
+    static Future<String?> verifyResetCode({
+      required String email,
+      required String code,
+    }) async {
+      try {
+        final r = await http.post(
+          Uri.parse('${ApiConfig.baseUrl}/password/verify'),
+          headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+          body: jsonEncode({'email': email, 'code': code}),
+        );
+        if (r.statusCode == 200) {
+          final json = jsonDecode(r.body) as Map<String, dynamic>;
+          return json['reset_token'] as String?;
+        }
+        return null;
+      } catch (_) {
+        return null;
+      }
+    }
+
+    /// 3) Faz o reset usando reset_token + confirmação
+    static Future<bool> resetPassword({
+      required String email,
+      required String resetToken,   // <- ATENÇÃO: reset_token (não "code")
+      required String newPassword,
+    }) async {
+      try {
+        final r = await http.post(
+          Uri.parse('${ApiConfig.baseUrl}/password/reset'),
+          headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+          body: jsonEncode({
+            'email': email,
+            'reset_token': resetToken,
+            'password': newPassword,
+            'password_confirmation': newPassword,
+          }),
+        );
+        return r.statusCode == 200;
+      } catch (_) {
+        return false;
+      }
+    }
+
 }
 
 
