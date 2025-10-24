@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+
 import '../../services/api_service.dart';
 import '../models/sorteio_detalhe_model.dart';
 import '../utils/app_date.dart';
@@ -18,6 +20,8 @@ class _RascunhosDiaPageState extends State<RascunhosDiaPage> {
   /// Lista de pares (cada item é a lista de sorteios de uma tentativa).
   late List<List<SorteioDetalhe>> _pares;
   int? _tentativaSelecionada;
+
+  final _nf = NumberFormat('0.00', 'pt_BR');
 
   @override
   void initState() {
@@ -52,7 +56,6 @@ class _RascunhosDiaPageState extends State<RascunhosDiaPage> {
       setState(() {
         _pares = pares;
         _loading = false;
-        // Seleciona por padrão a tentativa mais recente se estiver completa
         if (_pares.isNotEmpty && _pares.first.length == 2) {
           _tentativaSelecionada = _pares.first.first.tentativa;
         } else {
@@ -110,27 +113,25 @@ class _RascunhosDiaPageState extends State<RascunhosDiaPage> {
     if (confirmar != true) return;
 
     try {
-      // Backend espera { sorteio_id_1, sorteio_id_2 }
       await ApiService.publicarDuplaPorIds(sorteioId1: id1, sorteioId2: id2);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Dupla publicada! Abrindo sorteios ativos...')),
       );
-          // Vá para a tela de Sorteios Ativos já recarregando a lista
-      // Use pushReplacement para substituir a tela atual,
-      // ou pushAndRemoveUntil para limpar toda a pilha.
+
+      // Troca a tela por SorteioPage:
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const SorteioPage()),
       );
 
-      // Se preferir limpar a pilha inteira:
+      // (Opcional) se quiser limpar a pilha inteira:
       Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const SorteioPage()),
-      (route) => false,
-    );
+        MaterialPageRoute(builder: (_) => const SorteioPage()),
+        (route) => false,
+      );
 
-      // Recarrega (a dupla publicada deve deixar de aparecer como rascunho)
+      // Recarrega rascunhos (a dupla não deve mais aparecer)
       _carregar();
     } catch (e) {
       if (!mounted) return;
@@ -288,13 +289,31 @@ class _RascunhosDiaPageState extends State<RascunhosDiaPage> {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    t.nome ?? 'Time',
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          t.nome ?? 'Time',
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (t.media != null)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 6),
+                          child: Chip(
+                            label: Text('Média ${_nf.format(t.media)}'),
+                            visualDensity: VisualDensity.compact,
+                            materialTapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        ),
+                    ],
                   ),
                   const SizedBox(height: 6),
+
                   ...t.jogadores.map((j) {
                     return Padding(
                       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -312,7 +331,7 @@ class _RascunhosDiaPageState extends State<RascunhosDiaPage> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              '${j.numeroCamisa} - ${j.apelido}',
+                              '${j.numeroCamisa ?? ''} - ${j.apelido ?? j.nome ?? ''}',
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
