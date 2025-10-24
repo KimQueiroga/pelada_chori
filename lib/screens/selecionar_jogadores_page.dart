@@ -219,7 +219,7 @@ class _SelecionarJogadoresPageState extends State<SelecionarJogadoresPage> {
                   },
                   decoration: InputDecoration(
                     labelText: 'Descrição (*)',
-                    errorText: _descricaoError, // mostra erro quando necessário
+                    errorText: _descricaoError,
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                     hintText: 'Ex.: Sorteio semanal da terça-feira',
                   ),
@@ -299,7 +299,102 @@ class _SelecionarJogadoresPageState extends State<SelecionarJogadoresPage> {
     );
   }
 
-  // --------- Envio ao backend ---------
+  // --------- Envio ao backend (two-step) ---------
+
+  /// Dialog que coleta as médias dos IDs faltantes.
+  Future<Map<int, double>?> _pedirMediasFaltantes({
+    required List<int> idsFaltantes,
+  }) async {
+    // montar mapa id->nome para exibir
+    final nomesPorId = <int, String>{};
+    for (final j in _jogadores) {
+      final id = (j['id'] as num).toInt();
+      if (idsFaltantes.contains(id)) {
+        final apelido = (j['apelido'] ?? '') as String;
+        final nome = (j['nome'] ?? '') as String;
+        final rotulo = (apelido.trim().isNotEmpty ? apelido : nome).trim();
+        nomesPorId[id] = rotulo.isNotEmpty ? rotulo : 'Jogador $id';
+      }
+    }
+
+    final formKey = GlobalKey<FormState>();
+    final Map<int, TextEditingController> ctrls = {
+      for (final id in idsFaltantes) id: TextEditingController(text: '3,00'),
+    };
+
+    Map<int, double>? parseMedias() {
+      final out = <int, double>{};
+      for (final id in idsFaltantes) {
+        final raw = ctrls[id]!.text.trim().replaceAll(',', '.');
+        final v = double.tryParse(raw);
+        if (v == null || v < 0 || v > 5) return null;
+        out[id] = double.parse(v.toStringAsFixed(2));
+      }
+      return out;
+    }
+
+    final result = await showDialog<Map<int, double>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('Informar médias dos convidados'),
+          content: Form(
+            key: formKey,
+            child: SizedBox(
+              width: 380,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: idsFaltantes.map((id) {
+                    final nome = nomesPorId[id] ?? 'Jogador $id';
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: TextFormField(
+                        controller: ctrls[id],
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: InputDecoration(
+                          labelText: '$nome (ID $id)',
+                          hintText: '0,00 a 5,00',
+                        ),
+                        validator: (v) {
+                          final raw = (v ?? '').trim().replaceAll(',', '.');
+                          final val = double.tryParse(raw);
+                          if (val == null) return 'Informe um número';
+                          if (val < 0 || val > 5) return '0 a 5';
+                          return null;
+                        },
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, null),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (!formKey.currentState!.validate()) return;
+                final m = parseMedias();
+                if (m == null) return;
+                Navigator.pop(ctx, m);
+              },
+              child: const Text('Usar estas médias'),
+            ),
+          ],
+        );
+      },
+    );
+
+    for (final c in ctrls.values) {
+      c.dispose();
+    }
+    return result;
+  }
 
   Future<void> _gerarDuplo() async {
     final qtdTimes = _qtdTimes;
@@ -334,33 +429,60 @@ class _SelecionarJogadoresPageState extends State<SelecionarJogadoresPage> {
 
     setState(() => _sending = true);
 
-    try {
-      await ApiService.criarDuploCompleto(
-        data: _data,
-        descricao: desc, // agora sempre vem preenchido
-        quantidadeTimes: qtdTimes,
-        quantidadeJogadoresTime: qtdPorTime,
-        jogadoresIds: selecionados,
-        estrategia: _estrategia,
-      );
+    Map<int, double>? overrides; // id -> média (para os sem nota)
 
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Dois rascunhos gerados com sucesso!')),
-      );
+    while (true) {
+      try {
+        // NOVO método com require_media_for_unrated
+        await ApiService.criarSorteioDuploCompleto(
+          data: _data,
+          descricao: desc,
+          quantidadeTimes: qtdTimes,
+          quantidadeJogadoresTime: qtdPorTime,
+          jogadoresIds: selecionados,
+          mediasOverride: overrides,
+          requireMediaForUnrated: true,
+        );
 
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const RascunhosDiaPage()),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro ao gerar sorteios: $e')),
-      );
-    } finally {
-      if (mounted) setState(() => _sending = false);
+        if (!mounted) return;
+        setState(() => _sending = false);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Dois rascunhos gerados com sucesso!')),
+        );
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const RascunhosDiaPage()),
+        );
+        return;
+
+      } on NeedMediaException catch (e) {
+        // pede as médias e repete o loop
+        setState(() => _sending = false);
+
+        final coletadas = await _pedirMediasFaltantes(idsFaltantes: e.ids);
+        if (coletadas == null) {
+          _snack('Operação cancelada.');
+          return;
+        }
+        overrides ??= {};
+        overrides.addAll(coletadas);
+
+        setState(() => _sending = true);
+        // loop continua e reenviará com overrides
+
+      } catch (e) {
+        if (!mounted) return;
+        setState(() => _sending = false);
+        _snack('Erro ao gerar sorteios: $e');
+        return;
+      }
     }
+  }
+
+  void _snack(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   @override
@@ -412,8 +534,6 @@ class _SelecionarJogadoresPageState extends State<SelecionarJogadoresPage> {
   }
 }
 
-/// Controle de quantidade com +/-
-/// Quando `compact == true`, o rótulo fica acima e os botões ficam mais “magrinhos”.
 class _CounterTile extends StatelessWidget {
   final String titulo;
   final int valor;
@@ -496,7 +616,6 @@ class _CounterTile extends StatelessWidget {
   }
 }
 
-/// Campo de Estratégia (Dropdown) com opção compact
 class _StrategyField extends StatelessWidget {
   final String value;
   final ValueChanged<String?> onChanged;
@@ -538,7 +657,6 @@ class _StrategyField extends StatelessWidget {
   }
 }
 
-/// Campo de Data (InkWell) com opção compact e texto elíptico para não estourar
 class _DateField extends StatelessWidget {
   final DateTime date;
   final VoidCallback onPick;
