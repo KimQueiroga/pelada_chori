@@ -23,6 +23,8 @@ class _SelecionarJogadoresPageState extends State<SelecionarJogadoresPage> {
   int _qtdJogadoresPorTime = 5;
   DateTime _data = DateTime.now();
   final TextEditingController _descricaoCtrl = TextEditingController();
+  final FocusNode _descricaoFocus = FocusNode();
+  String? _descricaoError; // <- erro do campo obrigatório
   String _estrategia = 'balanceado';
 
   // Estado
@@ -38,6 +40,7 @@ class _SelecionarJogadoresPageState extends State<SelecionarJogadoresPage> {
   @override
   void dispose() {
     _descricaoCtrl.dispose();
+    _descricaoFocus.dispose();
     super.dispose();
   }
 
@@ -166,18 +169,23 @@ class _SelecionarJogadoresPageState extends State<SelecionarJogadoresPage> {
             final pair = isWidePair
                 ? Row(
                     children: [
-                      Expanded(child: _StrategyField(value: _estrategia, onChanged: (v) {
-                        setState(() => _estrategia = v ?? 'balanceado');
-                      })),
+                      Expanded(
+                        child: _StrategyField(
+                          value: _estrategia,
+                          onChanged: (v) => setState(() => _estrategia = v ?? 'balanceado'),
+                        ),
+                      ),
                       const SizedBox(width: 12),
                       Expanded(child: _DateField(date: _data, onPick: _pickDate)),
                     ],
                   )
                 : Column(
                     children: [
-                      _StrategyField(value: _estrategia, onChanged: (v) {
-                        setState(() => _estrategia = v ?? 'balanceado');
-                      }, compact: true),
+                      _StrategyField(
+                        value: _estrategia,
+                        onChanged: (v) => setState(() => _estrategia = v ?? 'balanceado'),
+                        compact: true,
+                      ),
                       const SizedBox(height: 10),
                       _DateField(date: _data, onPick: _pickDate, compact: true),
                     ],
@@ -199,11 +207,19 @@ class _SelecionarJogadoresPageState extends State<SelecionarJogadoresPage> {
 
                 const SizedBox(height: 12),
 
+                // DESCRIÇÃO — obrigatório
                 TextField(
                   controller: _descricaoCtrl,
+                  focusNode: _descricaoFocus,
                   maxLength: 80,
+                  onChanged: (_) {
+                    if (_descricaoError != null) {
+                      setState(() => _descricaoError = null);
+                    }
+                  },
                   decoration: InputDecoration(
-                    labelText: 'Descrição (opcional)',
+                    labelText: 'Descrição (*)',
+                    errorText: _descricaoError, // mostra erro quando necessário
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                     hintText: 'Ex.: Sorteio semanal da terça-feira',
                   ),
@@ -289,12 +305,22 @@ class _SelecionarJogadoresPageState extends State<SelecionarJogadoresPage> {
     final qtdTimes = _qtdTimes;
     final qtdPorTime = _qtdJogadoresPorTime;
     final totalNecessario = _necessarios;
-
     final selecionados = _selecionados.toList();
 
+    // validações
     if (qtdTimes <= 0 || qtdPorTime <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Informe quantidades válidas.')),
+      );
+      return;
+    }
+
+    final desc = _descricaoCtrl.text.trim();
+    if (desc.isEmpty) {
+      setState(() => _descricaoError = 'Informe a descrição');
+      _descricaoFocus.requestFocus();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('O campo Descrição é obrigatório.')),
       );
       return;
     }
@@ -311,7 +337,7 @@ class _SelecionarJogadoresPageState extends State<SelecionarJogadoresPage> {
     try {
       await ApiService.criarDuploCompleto(
         data: _data,
-        descricao: _descricaoCtrl.text.trim().isEmpty ? null : _descricaoCtrl.text.trim(),
+        descricao: desc, // agora sempre vem preenchido
         quantidadeTimes: qtdTimes,
         quantidadeJogadoresTime: qtdPorTime,
         jogadoresIds: selecionados,
@@ -549,7 +575,7 @@ class _DateField extends StatelessWidget {
                 'Data: ${DateFormat('dd/MM/yyyy').format(date)}',
                 style: theme.textTheme.bodyMedium,
                 maxLines: 1,
-                overflow: TextOverflow.ellipsis, // evita overflow
+                overflow: TextOverflow.ellipsis,
                 softWrap: false,
               ),
             ),
