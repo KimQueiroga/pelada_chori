@@ -9,6 +9,11 @@ import '../screens/sorteio_page.dart';
 import '../models/jogador_sorteio_model.dart';
 import '../models/sorteio_time_model.dart';
 
+String _safeEmoji(String s) => s.replaceAll('\uFE0F', ''); // remove VS-16
+  const _eShield = '🛡';  // Defesa
+  const _eTarget = '🤡';  // Meio
+  const _eBolt   = '⚡';  // Ataque (mais estável que 🔥 em alguns desktops)
+
 class RascunhosDiaPage extends StatefulWidget {
   const RascunhosDiaPage({Key? key}) : super(key: key);
 
@@ -152,7 +157,8 @@ class _RascunhosDiaPageState extends State<RascunhosDiaPage> {
     await Share.share(text);
   }
 
-  // Helpers de formatação “bonita”
+  // ====== Helpers de formatação “bonita” ======
+
   String _bold(String s) => '*$s*';
 
   String _fmtNum(double? v) =>
@@ -165,14 +171,32 @@ class _RascunhosDiaPageState extends State<RascunhosDiaPage> {
     return n.toString().padLeft(2, '0');
   }
 
+  // ---- Emojis “seguros” + normalizador ----
+  
+
+  /// Label sem emoji (UI)
+  String _posLabel(String? pos) {
+    switch ((pos ?? '').toLowerCase()) {
+      case 'defesa':
+        return 'DEF';
+      case 'meio':
+        return 'MEI';
+      case 'ataque':
+        return 'ATA';
+      default:
+        return pos ?? '';
+    }
+  }
+
+  /// Tag “bonita” (para mensagem compartilhada) com emoji seguro
   String _posTag(String? pos) {
     switch ((pos ?? '').toLowerCase()) {
       case 'defesa':
-        return 'DEF 🛡️';
+        return _safeEmoji('DEF $_eShield');
       case 'meio':
-        return 'MEI 🎯';
+        return _safeEmoji('MEI $_eTarget');
       case 'ataque':
-        return 'ATA 🔥';
+        return _safeEmoji('ATA $_eBolt');
       default:
         return pos ?? '';
     }
@@ -200,7 +224,7 @@ class _RascunhosDiaPageState extends State<RascunhosDiaPage> {
 
   String _formatSorteioBonito(SorteioDetalhe s) {
     final buffer = StringBuffer();
-    buffer.writeln('${_bold('Sorteio nº ${s.numero} • ${AppDate.brFromApi(s.data)}')}');
+    buffer.writeln('${_bold('⚽ Sorteio nº ${s.numero} • ${AppDate.brFromApi(s.data)}')}');
     if ((s.descricao ?? '').isNotEmpty) buffer.writeln(s.descricao!.trim());
     for (final t in s.times) {
       buffer.writeln();
@@ -448,13 +472,13 @@ class _RascunhosDiaPageState extends State<RascunhosDiaPage> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              '${_pad2(j.numeroCamisa)} - ${j.apelido ?? j.nome ?? 'Jogador'}',
+                              '${_pad2(j.numeroCamisa)} - ${j.apelido ?? j.nome ?? "Jogador"}',
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            _posTag(j.posicao).replaceAll(RegExp(r'\s[^\)]+$'), ''), // só texto
+                            _posLabel(j.posicao), // UI sem emoji
                             style: const TextStyle(color: Colors.grey),
                           ),
                         ],
