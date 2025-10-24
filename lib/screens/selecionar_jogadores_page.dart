@@ -23,7 +23,7 @@ class _SelecionarJogadoresPageState extends State<SelecionarJogadoresPage> {
   int _qtdJogadoresPorTime = 5;
   DateTime _data = DateTime.now();
   final TextEditingController _descricaoCtrl = TextEditingController();
-  String _estrategia = 'balanceado'; // outras opções no futuro
+  String _estrategia = 'balanceado';
 
   // Estado
   bool _loading = true;
@@ -68,7 +68,6 @@ class _SelecionarJogadoresPageState extends State<SelecionarJogadoresPage> {
         if (_selecionados.length < _necessarios) {
           _selecionados.add(jogadorId);
         } else {
-          // Capacidade atingida; ignora clique e avisa
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
@@ -87,7 +86,6 @@ class _SelecionarJogadoresPageState extends State<SelecionarJogadoresPage> {
   void _incTimes() => setState(() => _qtdTimes = (_qtdTimes + 1).clamp(1, 20));
   void _decTimes() => setState(() {
         if (_qtdTimes > 1) _qtdTimes--;
-        // Se reduzir a capacidade total, ajuste a seleção (evita ficar “excedida”)
         while (_selecionados.length > _necessarios) {
           _selecionados.remove(_selecionados.last);
         }
@@ -106,156 +104,161 @@ class _SelecionarJogadoresPageState extends State<SelecionarJogadoresPage> {
 
   Widget _buildConfigCard(BuildContext context) {
     final theme = Theme.of(context);
+
     return Card(
       margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       elevation: 2,
       child: Padding(
         padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Configurações do sorteio',
-                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isWideCounters = constraints.maxWidth >= 600; // counters lado a lado
+            final isWidePair = constraints.maxWidth >= 520; // estratégia+data lado a lado
+            final tituloJog = isWideCounters ? 'Jogadores/time' : 'Jog/time';
 
-            const SizedBox(height: 12),
-
-            Row(
-              children: [
-                Expanded(
-                  child: _CounterTile(
-                    titulo: 'Times',
-                    valor: _qtdTimes,
-                    onInc: _incTimes,
-                    onDec: _decTimes,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _CounterTile(
-                    titulo: 'Jogadores/time',
-                    valor: _qtdJogadoresPorTime,
-                    onInc: _incJogPorTime,
-                    onDec: _decJogPorTime,
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 12),
-
-            // Data + Estratégia
-            Row(
-              children: [
-                Expanded(
-                  child: InkWell(
-                    onTap: () async {
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate: _data,
-                        firstDate: DateTime(DateTime.now().year - 1),
-                        lastDate: DateTime(DateTime.now().year + 1),
-                      );
-                      if (picked != null) setState(() => _data = picked);
-                    },
-                    borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: theme.colorScheme.outlineVariant),
-                        borderRadius: BorderRadius.circular(10),
+            // --- Counters (Times / Jogadores por time) ---
+            final counters = isWideCounters
+                ? Row(
+                    children: [
+                      Expanded(
+                        child: _CounterTile(
+                          titulo: 'Times',
+                          valor: _qtdTimes,
+                          onInc: _incTimes,
+                          onDec: _decTimes,
+                          compact: true,
+                        ),
                       ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.event),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Data: ${DateFormat('dd/MM/yyyy').format(_data)}',
-                            style: theme.textTheme.bodyMedium,
-                          ),
-                          const Spacer(),
-                          const Icon(Icons.edit_calendar, size: 18),
-                        ],
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _CounterTile(
+                          titulo: tituloJog,
+                          valor: _qtdJogadoresPorTime,
+                          onInc: _incJogPorTime,
+                          onDec: _decJogPorTime,
+                          compact: true,
+                        ),
                       ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: InputDecorator(
-                    decoration: InputDecoration(
-                      labelText: 'Estratégia',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: _estrategia,
-                        isDense: true,
-                        onChanged: (v) => setState(() => _estrategia = v ?? 'balanceado'),
-                        items: const [
-                          DropdownMenuItem(
-                            value: 'balanceado',
-                            child: Text('Balanceado'),
-                          ),
-                          // Futuras estratégias podem entrar aqui
-                        ],
+                    ],
+                  )
+                : Column(
+                    children: [
+                      _CounterTile(
+                        titulo: 'Times',
+                        valor: _qtdTimes,
+                        onInc: _incTimes,
+                        onDec: _decTimes,
+                        compact: true,
                       ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+                      const SizedBox(height: 10),
+                      _CounterTile(
+                        titulo: tituloJog,
+                        valor: _qtdJogadoresPorTime,
+                        onInc: _incJogPorTime,
+                        onDec: _decJogPorTime,
+                        compact: true,
+                      ),
+                    ],
+                  );
 
-            const SizedBox(height: 12),
+            // --- Estratégia + Data (responsivo) ---
+            final pair = isWidePair
+                ? Row(
+                    children: [
+                      Expanded(child: _StrategyField(value: _estrategia, onChanged: (v) {
+                        setState(() => _estrategia = v ?? 'balanceado');
+                      })),
+                      const SizedBox(width: 12),
+                      Expanded(child: _DateField(date: _data, onPick: _pickDate)),
+                    ],
+                  )
+                : Column(
+                    children: [
+                      _StrategyField(value: _estrategia, onChanged: (v) {
+                        setState(() => _estrategia = v ?? 'balanceado');
+                      }, compact: true),
+                      const SizedBox(height: 10),
+                      _DateField(date: _data, onPick: _pickDate, compact: true),
+                    ],
+                  );
 
-            TextField(
-              controller: _descricaoCtrl,
-              maxLength: 80,
-              decoration: InputDecoration(
-                labelText: 'Descrição (opcional)',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                hintText: 'Ex.: Sorteio semanal da terça-feira',
-              ),
-            ),
-
-            const SizedBox(height: 8),
-
-            // Indicadores
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Selecionados: $_selecionadosQtde', style: theme.textTheme.bodyMedium),
-                Text('Necessários: $_necessarios',
-                    style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+                Text('Configurações do sorteio',
+                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+
+                const SizedBox(height: 12),
+
+                counters,
+
+                const SizedBox(height: 12),
+
+                pair,
+
+                const SizedBox(height: 12),
+
+                TextField(
+                  controller: _descricaoCtrl,
+                  maxLength: 80,
+                  decoration: InputDecoration(
+                    labelText: 'Descrição (opcional)',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    hintText: 'Ex.: Sorteio semanal da terça-feira',
+                  ),
+                ),
+
+                const SizedBox(height: 8),
+
+                // Indicadores
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Selecionados: $_selecionadosQtde', style: theme.textTheme.bodyMedium),
+                    Text('Necessários: $_necessarios',
+                        style:
+                            theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+                  ],
+                ),
+
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: LinearProgressIndicator(
+                    minHeight: 8,
+                    value: _necessarios == 0 ? 0 : _selecionadosQtde / _necessarios,
+                    backgroundColor: theme.colorScheme.surfaceVariant,
+                  ),
+                ),
+
+                const SizedBox(height: 8),
+                if (_faltam > 0)
+                  Text(
+                    'Faltam $_faltam jogador(es) para completar a capacidade.',
+                    style: theme.textTheme.bodySmall?.copyWith(color: Colors.orange[800]),
+                  )
+                else
+                  Text(
+                    'Capacidade completa!',
+                    style: theme.textTheme.bodySmall?.copyWith(color: Colors.green[800]),
+                  ),
               ],
-            ),
-
-            const SizedBox(height: 8),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: LinearProgressIndicator(
-                minHeight: 8,
-                value: _necessarios == 0 ? 0 : _selecionadosQtde / _necessarios,
-                backgroundColor: theme.colorScheme.surfaceVariant,
-              ),
-            ),
-
-            const SizedBox(height: 8),
-            if (_faltam > 0)
-              Text(
-                'Faltam $_faltam jogador(es) para completar a capacidade.',
-                style: theme.textTheme.bodySmall?.copyWith(color: Colors.orange[800]),
-              )
-            else
-              Text(
-                'Capacidade completa!',
-                style: theme.textTheme.bodySmall?.copyWith(color: Colors.green[800]),
-              ),
-          ],
+            );
+          },
         ),
       ),
     );
+  }
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _data,
+      firstDate: DateTime(DateTime.now().year - 1),
+      lastDate: DateTime(DateTime.now().year + 1),
+    );
+    if (picked != null) setState(() => _data = picked);
   }
 
   Widget _buildJogadorItem(Map<String, dynamic> jogador) {
@@ -320,7 +323,6 @@ class _SelecionarJogadoresPageState extends State<SelecionarJogadoresPage> {
         const SnackBar(content: Text('Dois rascunhos gerados com sucesso!')),
       );
 
-      // Levar o usuário para revisar os rascunhos do dia:
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const RascunhosDiaPage()),
@@ -384,12 +386,14 @@ class _SelecionarJogadoresPageState extends State<SelecionarJogadoresPage> {
   }
 }
 
-/// Mini-componente para o controle de quantidade com +/-
+/// Controle de quantidade com +/-
+/// Quando `compact == true`, o rótulo fica acima e os botões ficam mais “magrinhos”.
 class _CounterTile extends StatelessWidget {
   final String titulo;
   final int valor;
   final VoidCallback onInc;
   final VoidCallback onDec;
+  final bool compact;
 
   const _CounterTile({
     Key? key,
@@ -397,36 +401,162 @@ class _CounterTile extends StatelessWidget {
     required this.valor,
     required this.onInc,
     required this.onDec,
+    this.compact = false,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
+    final minusBtn = IconButton(
+      icon: const Icon(Icons.remove),
+      onPressed: onDec,
+      tooltip: 'Diminuir',
+      visualDensity: compact ? VisualDensity.compact : VisualDensity.standard,
+      padding: compact ? const EdgeInsets.all(6) : null,
+      constraints:
+          compact ? const BoxConstraints(minWidth: 36, minHeight: 36) : const BoxConstraints(),
+    );
+
+    final plusBtn = IconButton(
+      icon: const Icon(Icons.add),
+      onPressed: onInc,
+      tooltip: 'Aumentar',
+      visualDensity: compact ? VisualDensity.compact : VisualDensity.standard,
+      padding: compact ? const EdgeInsets.all(6) : null,
+      constraints:
+          compact ? const BoxConstraints(minWidth: 36, minHeight: 36) : const BoxConstraints(),
+    );
+
+    final numberText = Text(
+      '$valor',
+      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+    );
+
     return Container(
       decoration: BoxDecoration(
         border: Border.all(color: theme.colorScheme.outlineVariant),
         borderRadius: BorderRadius.circular(10),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      child: Row(
-        children: [
-          Text(titulo, style: theme.textTheme.bodyMedium),
-          const Spacer(),
-          IconButton(
-            icon: const Icon(Icons.remove),
-            onPressed: onDec,
-            tooltip: 'Diminuir',
-          ),
-          Text(
-            '$valor',
-            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-          ),
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: onInc,
-            tooltip: 'Aumentar',
-          ),
-        ],
+      padding: compact
+          ? const EdgeInsets.symmetric(horizontal: 10, vertical: 8)
+          : const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: compact
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(titulo, style: theme.textTheme.bodySmall),
+                const SizedBox(height: 6),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    minusBtn,
+                    numberText,
+                    plusBtn,
+                  ],
+                ),
+              ],
+            )
+          : Row(
+              children: [
+                Text(titulo, style: theme.textTheme.bodyMedium),
+                const Spacer(),
+                minusBtn,
+                numberText,
+                plusBtn,
+              ],
+            ),
+    );
+  }
+}
+
+/// Campo de Estratégia (Dropdown) com opção compact
+class _StrategyField extends StatelessWidget {
+  final String value;
+  final ValueChanged<String?> onChanged;
+  final bool compact;
+
+  const _StrategyField({
+    Key? key,
+    required this.value,
+    required this.onChanged,
+    this.compact = false,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final contentPadding =
+        compact ? const EdgeInsets.symmetric(horizontal: 12, vertical: 8) : const EdgeInsets.symmetric(horizontal: 12, vertical: 10);
+
+    return InputDecorator(
+      decoration: InputDecoration(
+        labelText: 'Estratégia',
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        contentPadding: contentPadding,
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: value,
+          isDense: true,
+          onChanged: onChanged,
+          items: const [
+            DropdownMenuItem(
+              value: 'balanceado',
+              child: Text('Balanceado'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Campo de Data (InkWell) com opção compact e texto elíptico para não estourar
+class _DateField extends StatelessWidget {
+  final DateTime date;
+  final VoidCallback onPick;
+  final bool compact;
+
+  const _DateField({
+    Key? key,
+    required this.date,
+    required this.onPick,
+    this.compact = false,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final pad =
+        compact ? const EdgeInsets.symmetric(horizontal: 12, vertical: 10) : const EdgeInsets.symmetric(horizontal: 12, vertical: 12);
+
+    return InkWell(
+      onTap: onPick,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: pad,
+        decoration: BoxDecoration(
+          border: Border.all(color: theme.colorScheme.outlineVariant),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.event),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Data: ${DateFormat('dd/MM/yyyy').format(date)}',
+                style: theme.textTheme.bodyMedium,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis, // evita overflow
+                softWrap: false,
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(Icons.edit_calendar, size: 18),
+          ],
+        ),
       ),
     );
   }
