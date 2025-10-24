@@ -9,11 +9,6 @@ import '../screens/sorteio_page.dart';
 import '../models/jogador_sorteio_model.dart';
 import '../models/sorteio_time_model.dart';
 
-String _safeEmoji(String s) => s.replaceAll('\uFE0F', ''); // remove VS-16
-  const _eShield = '🛡';  // Defesa
-  const _eTarget = '🤡';  // Meio
-  const _eBolt   = '⚡';  // Ataque (mais estável que 🔥 em alguns desktops)
-
 class RascunhosDiaPage extends StatefulWidget {
   const RascunhosDiaPage({Key? key}) : super(key: key);
 
@@ -146,7 +141,7 @@ class _RascunhosDiaPageState extends State<RascunhosDiaPage> {
   // ---------- COMPARTILHAR ----------
 
   Future<void> _shareText(String text) async {
-    // tenta WhatsApp (wa.me). Se não rolar, cai no share sheet do SO.
+    // Tenta WhatsApp (wa.me). Se não rolar, cai no share sheet do SO.
     final wa = Uri.parse('https://wa.me/?text=${Uri.encodeComponent(text)}');
     try {
       if (await canLaunchUrl(wa)) {
@@ -157,8 +152,7 @@ class _RascunhosDiaPageState extends State<RascunhosDiaPage> {
     await Share.share(text);
   }
 
-  // ====== Helpers de formatação “bonita” ======
-
+  // Helpers de formatação “bonita”
   String _bold(String s) => '*$s*';
 
   String _fmtNum(double? v) =>
@@ -171,11 +165,8 @@ class _RascunhosDiaPageState extends State<RascunhosDiaPage> {
     return n.toString().padLeft(2, '0');
   }
 
-  // ---- Emojis “seguros” + normalizador ----
-  
-
-  /// Label sem emoji (UI)
-  String _posLabel(String? pos) {
+  /// Rótulo curto da posição, sem emoji.
+  String _posShort(String? pos) {
     switch ((pos ?? '').toLowerCase()) {
       case 'defesa':
         return 'DEF';
@@ -188,26 +179,12 @@ class _RascunhosDiaPageState extends State<RascunhosDiaPage> {
     }
   }
 
-  /// Tag “bonita” (para mensagem compartilhada) com emoji seguro
-  String _posTag(String? pos) {
-    switch ((pos ?? '').toLowerCase()) {
-      case 'defesa':
-        return _safeEmoji('DEF $_eShield');
-      case 'meio':
-        return _safeEmoji('MEI $_eTarget');
-      case 'ataque':
-        return _safeEmoji('ATA $_eBolt');
-      default:
-        return pos ?? '';
-    }
-  }
-
   String _formatJogadorLinhaBonito(JogadorSorteio j) {
     final numero = _pad2(j.numeroCamisa);
     final nome = j.apelido?.trim().isNotEmpty == true
         ? j.apelido!
         : (j.nome ?? 'Jogador');
-    final pos = _posTag(j.posicao);
+    final pos = _posShort(j.posicao);
     final posTxt = pos.isNotEmpty ? ' ($pos)' : '';
     return '• $numero – $nome$posTxt';
   }
@@ -224,7 +201,7 @@ class _RascunhosDiaPageState extends State<RascunhosDiaPage> {
 
   String _formatSorteioBonito(SorteioDetalhe s) {
     final buffer = StringBuffer();
-    buffer.writeln('${_bold('⚽ Sorteio nº ${s.numero} • ${AppDate.brFromApi(s.data)}')}');
+    buffer.writeln('${_bold('Sorteio nº ${s.numero} • ${AppDate.brFromApi(s.data)}')}');
     if ((s.descricao ?? '').isNotEmpty) buffer.writeln(s.descricao!.trim());
     for (final t in s.times) {
       buffer.writeln();
@@ -478,7 +455,7 @@ class _RascunhosDiaPageState extends State<RascunhosDiaPage> {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            _posLabel(j.posicao), // UI sem emoji
+                            _posShort(j.posicao),
                             style: const TextStyle(color: Colors.grey),
                           ),
                         ],
