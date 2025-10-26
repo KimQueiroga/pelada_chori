@@ -18,7 +18,7 @@ class _SorteioDetalhePageState extends State<SorteioDetalhePage> {
   bool _loadingUser = true;
   bool _enviandoVoto = false;
 
-  // NOVO: controle do estado “já votei”
+  // estado “já votei”
   bool _jaVotei = false;
 
   @override
@@ -55,7 +55,6 @@ class _SorteioDetalhePageState extends State<SorteioDetalhePage> {
 
     setState(() => _enviandoVoto = true);
     try {
-      // OBS: se seu ApiService espera o jogadorId, use esta chamada:
       await ApiService.votarNoSorteio(
         sorteioId: widget.sorteio.id,
         jogadorId: _meuJogadorId!,
@@ -68,14 +67,12 @@ class _SorteioDetalhePageState extends State<SorteioDetalhePage> {
         const SnackBar(content: Text('Voto computado com sucesso!')),
       );
 
-      // Mostra o rótulo por um instante e volta
       await Future.delayed(const Duration(milliseconds: 900));
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
 
       final msg = e.toString();
-      // Se o backend devolveu algo como “já votou…”, travamos o botão em “Voto registrado”
       if (msg.toLowerCase().contains('já votou')) {
         setState(() => _jaVotei = true);
       }
@@ -116,9 +113,11 @@ class _SorteioDetalhePageState extends State<SorteioDetalhePage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     final sorteio = widget.sorteio;
 
-    // Decide rótulo/estado do botão
+    // rótulo/estado do botão
     final String botaoTexto = _loadingUser
         ? 'Carregando...'
         : (!_souParticipante)
@@ -136,11 +135,16 @@ class _SorteioDetalhePageState extends State<SorteioDetalhePage> {
             Text('Sorteio nº ${sorteio.numero}'),
             Text(
               'Data: ${DateFormat('dd/MM/yyyy').format(DateTime.parse(sorteio.data))}',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.white70),
+              // usa a cor “onPrimary” do appbar atual (fica ok no light/dark)
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: cs.onPrimary.withOpacity(0.72),
+              ),
             ),
           ],
         ),
       ),
+
+      // LISTA DE TIMES
       body: ListView.separated(
         padding: const EdgeInsets.all(16),
         itemCount: sorteio.times.length,
@@ -148,88 +152,98 @@ class _SorteioDetalhePageState extends State<SorteioDetalhePage> {
         itemBuilder: (context, index) {
           final time = sorteio.times[index];
 
-          return AnimatedContainer(
-            duration: const Duration(milliseconds: 400),
-            curve: Curves.easeInOut,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 3))],
-            ),
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  time.nome ?? 'Time',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 12),
-                ...time.jogadores.map((jogador) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 20,
-                          backgroundImage: jogador.foto != null && jogador.foto!.isNotEmpty
-                              ? NetworkImage(jogador.foto!)
-                              : null,
-                          child: (jogador.foto == null || jogador.foto!.isEmpty)
-                              ? const Icon(Icons.person)
-                              : null,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '${jogador.numeroCamisa} - ${jogador.apelido}',
-                                style: const TextStyle(fontSize: 16),
-                              ),
-                              Row(
-                                children: [
-                                  _iconForPosition(jogador.posicao),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    jogador.posicao ?? 'Sem posição',
-                                    style: TextStyle(color: _colorForPosition(jogador.posicao)),
-                                  ),
-                                ],
-                              ),
-                            ],
+          // Card respeita o tema automaticamente (cores, elevation, etc.)
+          return Card(
+            color: cs.surface, // superfície temática (funciona no dark)
+            elevation: 2,
+            shadowColor: theme.shadowColor,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    time.nome ?? 'Time',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  ...time.jogadores.map((jogador) {
+                    final hasFoto = (jogador.foto != null && jogador.foto!.isNotEmpty);
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 20,
+                            backgroundImage: hasFoto ? NetworkImage(jogador.foto!) : null,
+                            backgroundColor: cs.surfaceContainerHighest, // tema
+                            child: hasFoto
+                                ? null
+                                : Icon(Icons.person, color: cs.onSurfaceVariant),
                           ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '${jogador.numeroCamisa} - ${jogador.apelido}',
+                                  style: theme.textTheme.bodyLarge,
+                                ),
+                                Row(
+                                  children: [
+                                    _iconForPosition(jogador.posicao),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      jogador.posicao ?? 'Sem posição',
+                                      style: theme.textTheme.bodyMedium?.copyWith(
+                                        color: _colorForPosition(jogador.posicao),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      const Icon(Icons.star, size: 18, color: Colors.amber),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Média: ${time.mediaCalculada?.toStringAsFixed(2) ?? '-'}',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
                         ),
-                      ],
-                    ),
-                  );
-                }).toList(),
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    const Icon(Icons.star, size: 18, color: Colors.amber),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Média: ${time.mediaCalculada?.toStringAsFixed(2) ?? '-'}',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                )
-              ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           );
         },
       ),
 
-      // BOTÃO FIXO (vira “Voto registrado” após votar)
+      // BOTÃO FIXO
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
           child: FilledButton.icon(
             icon: _enviandoVoto
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
                 : Icon(_jaVotei ? Icons.verified : Icons.how_to_vote),
             label: Text(botaoTexto),
             onPressed: botaoHabilitado ? _votar : null,
