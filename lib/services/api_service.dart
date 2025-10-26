@@ -7,7 +7,6 @@ import '../models/sorteio_detalhe_model.dart';
 import 'package:intl/intl.dart';
 
 /// Exceção específica quando o backend exige médias manuais.
-/// O backend retorna 422 com { error: "...", ids: [1,2,3] }.
 class NeedMediaException implements Exception {
   final List<int> ids;
   final String? message;
@@ -20,7 +19,6 @@ class ApiService {
   // Buscar os dados do jogador autenticado
   static Future<Map<String, dynamic>> getMeusDados() async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/meus-dados');
-
     final response = await http.get(
       uri,
       headers: {
@@ -28,7 +26,6 @@ class ApiService {
         'Authorization': 'Bearer ${await getToken()}',
       },
     );
-
     if (response.statusCode == 200) {
       return json.decode(response.body);
     } else {
@@ -39,7 +36,6 @@ class ApiService {
   // Buscar todos os jogadores cadastrados (sem filtro de votação)
   static Future<List<Map<String, dynamic>>> getJogadoresTodos() async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/jogadores/todos');
-
     final response = await http.get(
       uri,
       headers: {
@@ -47,7 +43,6 @@ class ApiService {
         'Authorization': 'Bearer ${await getToken()}',
       },
     );
-
     if (response.statusCode == 200) {
       final List dados = json.decode(response.body);
       return dados.cast<Map<String, dynamic>>();
@@ -55,10 +50,9 @@ class ApiService {
       throw Exception('Erro ao buscar jogadores: ${response.body}');
     }
   }
-  
+
   static Future<List<SorteioSimplificadoModel>> getSorteiosAtivos() async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/ativos');
-
     final response = await http.get(
       uri,
       headers: {
@@ -69,9 +63,7 @@ class ApiService {
 
     if (response.statusCode == 200) {
       final List<dynamic> data = jsonDecode(response.body);
-      return data
-          .map((json) => SorteioSimplificadoModel.fromJson(json))
-          .toList();
+      return data.map((json) => SorteioSimplificadoModel.fromJson(json)).toList();
     } else {
       throw Exception('Erro ao carregar sorteios ativos: ${response.body}');
     }
@@ -153,8 +145,11 @@ class ApiService {
     }
   }
 
-  /// Votar em um dos sorteios (usa a rota /sorteios/{id}/votos)
-  static Future<void> votarNoSorteio(int sorteioId) async {
+  /// Votar em um sorteio publicado (envia jogador_id como o backend exige).
+  static Future<void> votarNoSorteio({
+    required int sorteioId,
+    required int jogadorId,
+  }) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/$sorteioId/votos');
     final response = await http.post(
       uri,
@@ -163,11 +158,56 @@ class ApiService {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ${await getToken()}',
       },
-      body: jsonEncode({'sorteio_id': sorteioId}),
+      body: jsonEncode({'jogador_id': jogadorId}),
     );
-    if (response.statusCode != 200 && response.statusCode != 201) {
-      throw Exception('Erro ao votar: ${response.body}');
+
+    if (response.statusCode == 201 || response.statusCode == 200) {
+      return;
     }
+
+    try {
+      final j = jsonDecode(response.body);
+      if (j is Map && j['message'] is String) {
+        throw Exception(j['message']);
+      }
+    } catch (_) {}
+
+    throw Exception('Erro ao votar: ${response.statusCode} ${response.body}');
+  }
+
+  /// >>> Resumo de votos dos sorteios em votação hoje.
+  /// Retorna um mapa {sorteio_id: total_votos}.
+  static Future<Map<int, int>> getResumoVotosHoje() async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/votacao-ativa/resumo');
+    final resp = await http.get(uri, headers: await _authHeaders());
+
+    if (resp.statusCode == 200) {
+      final List list = jsonDecode(resp.body) as List;
+      final map = <int, int>{};
+      for (final e in list) {
+        final id = (e['sorteio_id'] ?? e['id']) as int;
+        final total = (e['total_votos'] ?? e['total'] ?? 0) as int;
+        map[id] = total;
+      }
+      return map;
+    }
+    throw Exception('Erro ao carregar resumo de votos: ${resp.body}');
+  }
+
+  /// >>> NOVO: Detalhes de votos de um sorteio específico (usa ?detalhe=1).
+  /// Retorna { total: int, votos: [ {jogador_nome, jogador_foto, user_name, created_at}, ... ] }
+  static Future<Map<String, dynamic>> getVotosDetalheSorteio(int sorteioId) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/$sorteioId/votos?detalhe=1');
+    final resp = await http.get(uri, headers: await _authHeaders());
+
+    if (resp.statusCode == 200) {
+      final body = jsonDecode(resp.body) as Map<String, dynamic>;
+      final total = (body['total_votos'] is num) ? (body['total_votos'] as num).toInt() : 0;
+      final List votosRaw = (body['detalhes']?['votos'] as List?) ?? const [];
+      final votos = votosRaw.map<Map<String, dynamic>>((e) => (e as Map).cast<String, dynamic>()).toList();
+      return {'total': total, 'votos': votos};
+    }
+    throw Exception('Erro ao carregar votos do sorteio: ${resp.body}');
   }
 
   // Recuperar o token JWT armazenado
@@ -189,9 +229,7 @@ class ApiService {
     if (resp.statusCode == 200) {
       final raw = jsonDecode(resp.body);
       if (raw is List) {
-        return raw
-            .map<SorteioDetalhe>((e) => SorteioDetalhe.fromJson(e))
-            .toList();
+        return raw.map<SorteioDetalhe>((e) => SorteioDetalhe.fromJson(e)).toList();
       }
       return const <SorteioDetalhe>[];
     } else if (resp.statusCode == 204) {
@@ -200,7 +238,7 @@ class ApiService {
     throw Exception('Erro ao carregar rascunhos do dia: ${resp.body}');
   }
 
-  /// (LEGADO) Método antigo – mantido caso alguma tela ainda use.
+  /// (LEGADO) Mantido se alguma tela ainda usar.
   static Future<void> criarDuploCompleto({
     required DateTime data,
     String? descricao,
@@ -235,22 +273,19 @@ class ApiService {
     }
   }
 
-  /// NOVO fluxo em 2 passos:
-  ///  - require_media_for_unrated=true pede que o backend liste IDs sem média
-  ///  - se necessário, a tela chama novamente com mediasOverride
+  /// Novo fluxo do sorteio em 2 passos (mantido do seu código)
   static Future<Map<String, dynamic>> criarSorteioDuploCompleto({
     required DateTime data,
     String? descricao,
     required int quantidadeTimes,
     required int quantidadeJogadoresTime,
     required List<int> jogadoresIds,
-    Map<int, double>? mediasOverride, // id -> media (apenas faltantes)
+    Map<int, double>? mediasOverride,
     bool requireMediaForUnrated = true,
     double? limite,
   }) async {
     final url = Uri.parse('${ApiConfig.baseUrl}/sorteios/duplo-completo');
 
-    // Se houver override, usa o formato "jogadores: [{id, media?}]"
     List<Map<String, dynamic>>? jogadoresArray;
     if (mediasOverride != null && mediasOverride.isNotEmpty) {
       jogadoresArray = jogadoresIds.map((id) {
@@ -258,7 +293,7 @@ class ApiService {
           return {'id': id, 'media': mediasOverride[id]};
         }
         return {'id': id};
-        }).toList();
+      }).toList();
     }
 
     final body = <String, dynamic>{
@@ -323,7 +358,6 @@ class ApiService {
     }
   }
 
-  // lib/services/api_service.dart
   static Future<bool> updateMeusDados(Map<String, dynamic> payload) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -339,11 +373,7 @@ class ApiService {
         body: jsonEncode(payload),
       );
 
-      if (resp.statusCode == 200) {
-        return true;
-      } else {
-        return false;
-      }
+      return resp.statusCode == 200;
     } catch (_) {
       return false;
     }
@@ -362,7 +392,6 @@ class ApiService {
     }
   }
 
-  /// 2) Verifica o código e devolve o reset_token (string) ou null
   static Future<String?> verifyResetCode({
     required String email,
     required String code,
@@ -383,7 +412,6 @@ class ApiService {
     }
   }
 
-  /// 3) Faz o reset usando reset_token + confirmação
   static Future<bool> resetPassword({
     required String email,
     required String resetToken,
