@@ -15,6 +15,15 @@ class NeedMediaException implements Exception {
   String toString() => message ?? 'Jogadores sem média: $ids';
 }
 
+/// Exceção específica para empate ao encerrar votação.
+class EmpateVotacaoException implements Exception {
+  final List<Map<String, dynamic>> empate; // [{id, votos}, {id, votos}]
+  final String message;
+  EmpateVotacaoException(this.empate, {this.message = 'Empate detectado.'});
+  @override
+  String toString() => message;
+}
+
 class ApiService {
   // Buscar os dados do jogador autenticado
   static Future<Map<String, dynamic>> getMeusDados() async {
@@ -128,9 +137,16 @@ class ApiService {
     throw Exception('Erro ao carregar votação ativa: ${resp.body}');
   }
 
-  /// Encerrar votação do dia (decide vencedor e descarta a outra)
-  static Future<void> fecharVotacao(DateTime data) async {
+  /// Encerrar votação do dia (com suporte a empate via vencedorId)
+  static Future<Map<String, dynamic>> fecharVotacaoDoDia({
+    required DateTime data,
+    int? vencedorId, // opcional para resolver empate
+  }) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/fechar-votacao');
+
+    final body = <String, dynamic>{'data': _ymd(data)};
+    if (vencedorId != null) body['vencedor_id'] = vencedorId;
+
     final response = await http.post(
       uri,
       headers: {
@@ -138,11 +154,23 @@ class ApiService {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ${await getToken()}',
       },
-      body: jsonEncode({'data': _ymd(data)}),
+      body: jsonEncode(body),
     );
-    if (response.statusCode != 200) {
-      throw Exception('Erro ao fechar votação: ${response.body}');
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
     }
+
+    if (response.statusCode == 409) {
+      final j = jsonDecode(response.body);
+      final lista = (j['empate'] as List?)
+              ?.map<Map<String, dynamic>>((e) => (e as Map).cast<String, dynamic>())
+              .toList() ??
+          const [];
+      throw EmpateVotacaoException(lista, message: (j['message'] ?? 'Empate') as String);
+    }
+
+    throw Exception('Erro ao fechar votação: ${response.statusCode} ${response.body}');
   }
 
   /// Votar em um sorteio publicado (envia jogador_id como o backend exige).
@@ -165,6 +193,7 @@ class ApiService {
       return;
     }
 
+    // Erros amigáveis do backend
     try {
       final j = jsonDecode(response.body);
       if (j is Map && j['message'] is String) {
@@ -175,8 +204,7 @@ class ApiService {
     throw Exception('Erro ao votar: ${response.statusCode} ${response.body}');
   }
 
-  /// >>> Resumo de votos dos sorteios em votação hoje.
-  /// Retorna um mapa {sorteio_id: total_votos}.
+  /// Resumo de votos dos sorteios em votação hoje. Retorna {sorteio_id: total_votos}.
   static Future<Map<int, int>> getResumoVotosHoje() async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/votacao-ativa/resumo');
     final resp = await http.get(uri, headers: await _authHeaders());
@@ -194,7 +222,7 @@ class ApiService {
     throw Exception('Erro ao carregar resumo de votos: ${resp.body}');
   }
 
-  /// >>> NOVO: Detalhes de votos de um sorteio específico (usa ?detalhe=1).
+  /// Detalhes de votos de um sorteio (usa ?detalhe=1).
   /// Retorna { total: int, votos: [ {jogador_nome, jogador_foto, user_name, created_at}, ... ] }
   static Future<Map<String, dynamic>> getVotosDetalheSorteio(int sorteioId) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/$sorteioId/votos?detalhe=1');
@@ -204,7 +232,9 @@ class ApiService {
       final body = jsonDecode(resp.body) as Map<String, dynamic>;
       final total = (body['total_votos'] is num) ? (body['total_votos'] as num).toInt() : 0;
       final List votosRaw = (body['detalhes']?['votos'] as List?) ?? const [];
-      final votos = votosRaw.map<Map<String, dynamic>>((e) => (e as Map).cast<String, dynamic>()).toList();
+      final votos = votosRaw
+          .map<Map<String, dynamic>>((e) => (e as Map).cast<String, dynamic>())
+          .toList();
       return {'total': total, 'votos': votos};
     }
     throw Exception('Erro ao carregar votos do sorteio: ${resp.body}');
@@ -326,7 +356,9 @@ class ApiService {
     if (resp.statusCode == 422) {
       final json = jsonDecode(resp.body);
       if (json is Map && json['ids'] is List) {
-        final ids = (json['ids'] as List).map((e) => int.parse(e.toString())).toList();
+        final ids = (json['ids'] as List)
+            .map((e) => int.parse(e.toString()))
+            .toList();
         throw NeedMediaException(ids, message: json['error']?.toString());
       }
       throw Exception(json['error'] ?? 'Erro de validação.');

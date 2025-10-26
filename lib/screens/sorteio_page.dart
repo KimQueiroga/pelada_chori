@@ -26,6 +26,9 @@ class _SorteioPageState extends State<SorteioPage> {
   Map<int, int> _votosHoje = {};
   Map<int, List<Map<String, dynamic>>> _votantesPorSorteio = {};
 
+  // estado do botão encerrar
+  bool _encerrando = false;
+
   int get _totalVotosHoje =>
       _votosHoje.values.fold<int>(0, (prev, e) => prev + e);
 
@@ -38,10 +41,10 @@ class _SorteioPageState extends State<SorteioPage> {
   Future<void> _carregarTudo() async {
     setState(() => _loading = true);
     try {
-      await _carregarSorteios(); // precisa ser antes para termos os IDs
+      await _carregarSorteios();
       await Future.wait([
         _carregarResumoVotos(),
-        _carregarDetalhesDeCadaSorteio(), // <- detalhe=1 por sorteio
+        _carregarDetalhesDeCadaSorteio(),
       ]);
       await _verificarRascunhosHoje();
     } finally {
@@ -87,7 +90,7 @@ class _SorteioPageState extends State<SorteioPage> {
         _votosHoje = totals;
       });
     } catch (_) {
-      // silencioso por enquanto (UI ainda funciona com o resumo)
+      // silencioso
     }
   }
 
@@ -168,15 +171,13 @@ class _SorteioPageState extends State<SorteioPage> {
     if (lista.isEmpty) return const SizedBox.shrink();
 
     final top3 = lista.take(3).toList();
-
-    // Cálculo de largura: 1º avatar = 28px, cada próximo desloca 18px
-    final double base = 28.0;
-    final double overlap = 18.0;
+    const double base = 28.0;
+    const double overlap = 18.0;
     final double width = base + (top3.length - 1) * overlap;
 
     return SizedBox(
       height: 28,
-      width: width, // <<< IMPORTANTE: largura finita para a Stack
+      width: width, // largura finita para a Stack
       child: Stack(
         clipBehavior: Clip.none,
         children: [
@@ -193,10 +194,8 @@ class _SorteioPageState extends State<SorteioPage> {
                 child: (() {
                   final foto = (top3[i]['jogador_foto'] as String?)?.trim();
                   if (foto != null && foto.isNotEmpty) return null;
-                  final nome = (top3[i]['jogador_nome'] ??
-                          top3[i]['user_name'] ??
-                          '')
-                      .toString();
+                  final nome =
+                      (top3[i]['jogador_nome'] ?? top3[i]['user_name'] ?? '').toString();
                   return Text(
                     _initialFromName(nome),
                     style: const TextStyle(
@@ -212,10 +211,11 @@ class _SorteioPageState extends State<SorteioPage> {
       ),
     );
   }
+
   Widget _pollBar({
     required int votosDoSorteio,
     required int votosTotais,
-    required VoidCallback onMostrarVotos, // <<< novo
+    required VoidCallback onMostrarVotos,
   }) {
     final percent = (votosTotais > 0) ? (votosDoSorteio / votosTotais) : 0.0;
     return Column(
@@ -254,7 +254,6 @@ class _SorteioPageState extends State<SorteioPage> {
   }
 
   Future<void> _mostrarVotantesDeSorteio(int sorteioId) async {
-    // usa os dados já carregados (_votantesPorSorteio) por enquanto
     final s = _sorteios.firstWhere((e) => e.id == sorteioId);
     final lista = _votantesPorSorteio[sorteioId] ?? const [];
 
@@ -286,7 +285,8 @@ class _SorteioPageState extends State<SorteioPage> {
                     separatorBuilder: (_, __) => const Divider(height: 1),
                     itemBuilder: (context, i) {
                       final v = lista[i];
-                      final nome = (v['jogador_nome'] ?? v['user_name'] ?? 'Jogador').toString();
+                      final nome =
+                          (v['jogador_nome'] ?? v['user_name'] ?? 'Jogador').toString();
                       final foto = (v['jogador_foto'] as String?)?.trim();
                       return ListTile(
                         leading: CircleAvatar(
@@ -303,6 +303,116 @@ class _SorteioPageState extends State<SorteioPage> {
                 ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  // ---------- Encerrar votação (com empate) ----------
+
+  Future<void> _confirmarEncerramento() async {
+    if (_sorteios.length != 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('É preciso ter exatamente 2 sorteios em votação.')),
+      );
+      return;
+    }
+
+    final a = _sorteios[0];
+    final b = _sorteios[1];
+    final votosA = _votosHoje[a.id] ?? 0;
+    final votosB = _votosHoje[b.id] ?? 0;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Encerrar votação do dia?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Sorteio nº ${a.numero}: $votosA voto(s)'),
+            Text('Sorteio nº ${b.numero}: $votosB voto(s)'),
+            const SizedBox(height: 12),
+            const Text('Isso confirmará o vencedor e descartará o perdedor.'),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Encerrar')),
+        ],
+      ),
+    );
+
+    if (ok != true) return;
+
+    await _encerrarVotacao();
+  }
+
+  Future<void> _encerrarVotacao({int? vencedorId}) async {
+    setState(() => _encerrando = true);
+    try {
+      await ApiService.fecharVotacaoDoDia(
+        data: DateTime.now(),
+        vencedorId: vencedorId,
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Votação encerrada com sucesso!')),
+      );
+      await _carregarTudo();
+    } on EmpateVotacaoException catch (e) {
+      if (!mounted) return;
+      final escolhido = await _dialogEscolherVencedorEmCasoDeEmpate(e.empate);
+      if (escolhido != null) {
+        await _encerrarVotacao(vencedorId: escolhido);
+      }
+    } catch (err) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Falha ao encerrar: $err')),
+      );
+    } finally {
+      if (mounted) setState(() => _encerrando = false);
+    }
+  }
+
+  Future<int?> _dialogEscolherVencedorEmCasoDeEmpate(
+      List<Map<String, dynamic>> empate) async {
+    // empate: [{id, votos}, {id, votos}]
+    final m = {for (final s in _sorteios) s.id: s};
+    int? selecionado = (empate.isNotEmpty ? empate.first['id'] as int? : null);
+
+    return showDialog<int>(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (context, setSt) => AlertDialog(
+          title: const Text('Empate — escolha o vencedor'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: empate.map((e) {
+              final id = e['id'] as int;
+              final votos = e['votos'] as int? ?? 0;
+              final s = m[id];
+              final rotulo = s != null ? 'Sorteio nº ${s.numero}' : 'Sorteio $id';
+              return RadioListTile<int>(
+                value: id,
+                groupValue: selecionado,
+                onChanged: (v) => setSt(() => selecionado = v),
+                title: Text(rotulo),
+                subtitle: Text('$votos voto(s)'),
+              );
+            }).toList(),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+            FilledButton(
+              onPressed:
+                  selecionado == null ? null : () => Navigator.pop<int>(context, selecionado),
+              child: const Text('Confirmar vencedor'),
+            ),
+          ],
         ),
       ),
     );
@@ -372,12 +482,12 @@ class _SorteioPageState extends State<SorteioPage> {
                       ),
                     ),
 
-                  // barra estilo "enquete" (usa totais do dia)
+                  // barra estilo "enquete"
                   if (_votosHoje.isNotEmpty)
                     _pollBar(
                       votosDoSorteio: votosEste,
                       votosTotais: _totalVotosHoje,
-                      onMostrarVotos: () => _mostrarVotantesDeSorteio(sorteio.id), // <<< aqui
+                      onMostrarVotos: () => _mostrarVotantesDeSorteio(sorteio.id),
                     ),
 
                   const Align(
@@ -388,7 +498,6 @@ class _SorteioPageState extends State<SorteioPage> {
               ),
             ),
           ),
-          // selo "ABERTO"
           Positioned(
             top: 0,
             right: 0,
@@ -419,7 +528,7 @@ class _SorteioPageState extends State<SorteioPage> {
     final bodyList = _loading
         ? const Center(child: CircularProgressIndicator())
         : _sorteios.isEmpty
-            ? const Center(child: Text('Nenhum sorteio ativo encontrado.'))
+            ? const Center(child: Text('Nenhum sorteio disponivel para votaçao.'))
             : ListView.builder(
                 padding: const EdgeInsets.only(bottom: 96),
                 itemCount: _sorteios.length,
@@ -435,6 +544,21 @@ class _SorteioPageState extends State<SorteioPage> {
             icon: const Icon(Icons.description_outlined),
             onPressed: _abrirRascunhos,
           ),
+          if (_sorteios.length == 2)
+            IconButton(
+              tooltip: 'Encerrar votação do dia',
+              icon: _encerrando
+                  ? const Padding(
+                      padding: EdgeInsets.all(10),
+                      child: SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  : const Icon(Icons.how_to_vote_rounded),
+              onPressed: _encerrando ? null : _confirmarEncerramento,
+            ),
         ],
       ),
       body: RefreshIndicator(
