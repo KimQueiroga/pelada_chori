@@ -4,7 +4,6 @@ import 'package:pelada_chori/screens/votacao_page.dart';
 import 'package:pelada_chori/screens/meus_dados_page.dart';
 import 'package:pelada_chori/screens/sorteio_page.dart';
 import 'package:pelada_chori/widgets/home_highlights_carousel.dart';
-import 'package:pelada_chori/screens/configuracoes_page.dart';
 import 'package:pelada_chori/services/auth_service.dart'; // <-- novo
 
 

@@ -6,12 +6,19 @@ import '../models/sorteio_simplificado_model.dart';
 import '../models/sorteio_detalhe_model.dart';
 import 'package:intl/intl.dart';
 
+/// Exceção específica quando o backend exige médias manuais.
+class NeedMediaException implements Exception {
+  final List<int> ids;
+  final String? message;
+  NeedMediaException(this.ids, {this.message});
+  @override
+  String toString() => message ?? 'Jogadores sem média: $ids';
+}
 
 class ApiService {
   // Buscar os dados do jogador autenticado
   static Future<Map<String, dynamic>> getMeusDados() async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/meus-dados');
-
     final response = await http.get(
       uri,
       headers: {
@@ -19,7 +26,6 @@ class ApiService {
         'Authorization': 'Bearer ${await getToken()}',
       },
     );
-
     if (response.statusCode == 200) {
       return json.decode(response.body);
     } else {
@@ -30,7 +36,6 @@ class ApiService {
   // Buscar todos os jogadores cadastrados (sem filtro de votação)
   static Future<List<Map<String, dynamic>>> getJogadoresTodos() async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/jogadores/todos');
-
     final response = await http.get(
       uri,
       headers: {
@@ -38,7 +43,6 @@ class ApiService {
         'Authorization': 'Bearer ${await getToken()}',
       },
     );
-
     if (response.statusCode == 200) {
       final List dados = json.decode(response.body);
       return dados.cast<Map<String, dynamic>>();
@@ -46,10 +50,9 @@ class ApiService {
       throw Exception('Erro ao buscar jogadores: ${response.body}');
     }
   }
-  
-    static Future<List<SorteioSimplificadoModel>> getSorteiosAtivos() async {
-    final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/ativos');
 
+  static Future<List<SorteioSimplificadoModel>> getSorteiosAtivos() async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/ativos');
     final response = await http.get(
       uri,
       headers: {
@@ -60,115 +63,160 @@ class ApiService {
 
     if (response.statusCode == 200) {
       final List<dynamic> data = jsonDecode(response.body);
-      return data
-          .map((json) => SorteioSimplificadoModel.fromJson(json))
-          .toList();
+      return data.map((json) => SorteioSimplificadoModel.fromJson(json)).toList();
     } else {
       throw Exception('Erro ao carregar sorteios ativos: ${response.body}');
     }
   }
 
-    static Future<SorteioDetalhe> getSorteioDetalhe(int id) async {
-      final response = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/sorteios/$id'),
-        headers: {
-          'Accept': 'application/json',
-          'Authorization': 'Bearer ${await getToken()}',
-        },
-      );
+  static Future<SorteioDetalhe> getSorteioDetalhe(int id) async {
+    final response = await http.get(
+      Uri.parse('${ApiConfig.baseUrl}/sorteios/$id'),
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer ${await getToken()}',
+      },
+    );
 
-      if (response.statusCode == 200) {
-        return SorteioDetalhe.fromJson(jsonDecode(response.body));
-      } else {
-        throw Exception('Erro ao buscar detalhes do sorteio');
+    if (response.statusCode == 200) {
+      return SorteioDetalhe.fromJson(jsonDecode(response.body));
+    } else {
+      throw Exception('Erro ao buscar detalhes do sorteio');
+    }
+  }
+
+  static String _ymd(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  /// Publica a dupla mais recente do dia para votação
+  static Future<void> publicarDupla(DateTime data) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/publicar');
+    final response = await http.post(
+      uri,
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ${await getToken()}',
+      },
+      body: jsonEncode({'data': _ymd(data)}),
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Erro ao publicar: ${response.body}');
+    }
+  }
+
+  /// Retorna a dupla atualmente em votação (com votos_count)
+  static Future<SorteioDetalhe?> getVotacaoAtiva() async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/votacao-ativa');
+    final resp = await http.get(uri, headers: await _authHeaders());
+
+    if (resp.statusCode == 200) {
+      final raw = jsonDecode(resp.body);
+      if (raw == null) return null;
+
+      if (raw is List) {
+        if (raw.isEmpty) return null;
+        return SorteioDetalhe.fromJson(raw.first);
       }
-    }
-
-      static String _ymd(DateTime d) =>
-        '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-
-    /// Rascunhos do dia (as duas tentativas ainda não publicadas)
-    /// Publica a dupla mais recente do dia para votação
-    static Future<void> publicarDupla(DateTime data) async {
-      final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/publicar');
-      final response = await http.post(
-        uri,
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ${await getToken()}',
-        },
-        body: jsonEncode({'data': _ymd(data)}),
-      );
-      if (response.statusCode != 200) {
-        throw Exception('Erro ao publicar: ${response.body}');
+      if (raw is Map<String, dynamic>) {
+        return SorteioDetalhe.fromJson(raw);
       }
+      return null;
+    } else if (resp.statusCode == 204) {
+      return null;
+    }
+    throw Exception('Erro ao carregar votação ativa: ${resp.body}');
+  }
+
+  /// Encerrar votação do dia (decide vencedor e descarta a outra)
+  static Future<void> fecharVotacao(DateTime data) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/fechar-votacao');
+    final response = await http.post(
+      uri,
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ${await getToken()}',
+      },
+      body: jsonEncode({'data': _ymd(data)}),
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Erro ao fechar votação: ${response.body}');
+    }
+  }
+
+  /// Votar em um sorteio publicado (envia jogador_id como o backend exige).
+  static Future<void> votarNoSorteio({
+    required int sorteioId,
+    required int jogadorId,
+  }) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/$sorteioId/votos');
+    final response = await http.post(
+      uri,
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ${await getToken()}',
+      },
+      body: jsonEncode({'jogador_id': jogadorId}),
+    );
+
+    if (response.statusCode == 201 || response.statusCode == 200) {
+      return;
     }
 
-    /// Retorna a dupla atualmente em votação (com votos_count)
-      static Future<SorteioDetalhe?> getVotacaoAtiva() async {
-      final uri = Uri.parse('${ApiConfig.baseUrl}/votacao-ativa');
-      final resp = await http.get(uri, headers: await _authHeaders());
-
-      if (resp.statusCode == 200) {
-        final raw = jsonDecode(resp.body);
-        if (raw == null) return null;
-
-        if (raw is List) {
-          if (raw.isEmpty) return null;
-          return SorteioDetalhe.fromJson(raw.first);
-        }
-        if (raw is Map<String, dynamic>) {
-          return SorteioDetalhe.fromJson(raw);
-        }
-        return null;
-      } else if (resp.statusCode == 204) {
-        return null;
+    try {
+      final j = jsonDecode(response.body);
+      if (j is Map && j['message'] is String) {
+        throw Exception(j['message']);
       }
-      throw Exception('Erro ao carregar votação ativa: ${resp.body}');
-    }
+    } catch (_) {}
 
-    /// Encerrar votação do dia (decide vencedor e descarta a outra)
-    static Future<void> fecharVotacao(DateTime data) async {
-      final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/fechar-votacao');
-      final response = await http.post(
-        uri,
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ${await getToken()}',
-        },
-        body: jsonEncode({'data': _ymd(data)}),
-      );
-      if (response.statusCode != 200) {
-        throw Exception('Erro ao fechar votação: ${response.body}');
+    throw Exception('Erro ao votar: ${response.statusCode} ${response.body}');
+  }
+
+  /// >>> Resumo de votos dos sorteios em votação hoje.
+  /// Retorna um mapa {sorteio_id: total_votos}.
+  static Future<Map<int, int>> getResumoVotosHoje() async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/votacao-ativa/resumo');
+    final resp = await http.get(uri, headers: await _authHeaders());
+
+    if (resp.statusCode == 200) {
+      final List list = jsonDecode(resp.body) as List;
+      final map = <int, int>{};
+      for (final e in list) {
+        final id = (e['sorteio_id'] ?? e['id']) as int;
+        final total = (e['total_votos'] ?? e['total'] ?? 0) as int;
+        map[id] = total;
       }
+      return map;
     }
+    throw Exception('Erro ao carregar resumo de votos: ${resp.body}');
+  }
 
-    /// Votar em um dos sorteios (usa a rota /sorteios/{id}/votos)
-    static Future<void> votarNoSorteio(int sorteioId) async {
-      final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/$sorteioId/votos');
-      final response = await http.post(
-        uri,
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ${await getToken()}',
-        },
-        body: jsonEncode({'sorteio_id': sorteioId}),
-      );
-      if (response.statusCode != 200 && response.statusCode != 201) {
-        throw Exception('Erro ao votar: ${response.body}');
-      }
+  /// >>> NOVO: Detalhes de votos de um sorteio específico (usa ?detalhe=1).
+  /// Retorna { total: int, votos: [ {jogador_nome, jogador_foto, user_name, created_at}, ... ] }
+  static Future<Map<String, dynamic>> getVotosDetalheSorteio(int sorteioId) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/$sorteioId/votos?detalhe=1');
+    final resp = await http.get(uri, headers: await _authHeaders());
+
+    if (resp.statusCode == 200) {
+      final body = jsonDecode(resp.body) as Map<String, dynamic>;
+      final total = (body['total_votos'] is num) ? (body['total_votos'] as num).toInt() : 0;
+      final List votosRaw = (body['detalhes']?['votos'] as List?) ?? const [];
+      final votos = votosRaw.map<Map<String, dynamic>>((e) => (e as Map).cast<String, dynamic>()).toList();
+      return {'total': total, 'votos': votos};
     }
+    throw Exception('Erro ao carregar votos do sorteio: ${resp.body}');
+  }
 
-    // Recuperar o token JWT armazenado
-    static Future<String> getToken() async {
-      final prefs = await SharedPreferences.getInstance();
-      return prefs.getString('jwt_token') ?? '';
-    }
+  // Recuperar o token JWT armazenado
+  static Future<String> getToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('jwt_token') ?? '';
+  }
 
-    static Future<Map<String, String>> _authHeaders() async => {
+  static Future<Map<String, String>> _authHeaders() async => {
         'Accept': 'application/json',
         'Authorization': 'Bearer ${await getToken()}',
       };
@@ -181,9 +229,7 @@ class ApiService {
     if (resp.statusCode == 200) {
       final raw = jsonDecode(resp.body);
       if (raw is List) {
-        return raw
-            .map<SorteioDetalhe>((e) => SorteioDetalhe.fromJson(e))
-            .toList();
+        return raw.map<SorteioDetalhe>((e) => SorteioDetalhe.fromJson(e)).toList();
       }
       return const <SorteioDetalhe>[];
     } else if (resp.statusCode == 204) {
@@ -192,7 +238,8 @@ class ApiService {
     throw Exception('Erro ao carregar rascunhos do dia: ${resp.body}');
   }
 
-    static Future<void> criarDuploCompleto({
+  /// (LEGADO) Mantido se alguma tela ainda usar.
+  static Future<void> criarDuploCompleto({
     required DateTime data,
     String? descricao,
     required int quantidadeTimes,
@@ -204,7 +251,7 @@ class ApiService {
 
     final body = {
       'data': DateFormat('yyyy-MM-dd').format(data),
-      'descricao': descricao, // pode ser null
+      'descricao': descricao,
       'quantidade_times': quantidadeTimes,
       'quantidade_jogadores_time': quantidadeJogadoresTime,
       'jogadores_ids': jogadoresIds,
@@ -215,10 +262,10 @@ class ApiService {
       uri,
       headers: {
         'Accept': 'application/json',
-        'Content-Type': 'application/json', // <== IMPORTANTE
+        'Content-Type': 'application/json',
         'Authorization': 'Bearer ${await getToken()}',
       },
-      body: jsonEncode(body), // <== IMPORTANTE
+      body: jsonEncode(body),
     );
 
     if (res.statusCode != 201) {
@@ -226,119 +273,164 @@ class ApiService {
     }
   }
 
-    static Future<void> publicarDuplaPorIds({
-      required int sorteioId1,
-      required int sorteioId2,
-    }) async {
-      final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/publicar');
-      final resp = await http.post(
-        uri,
+  /// Novo fluxo do sorteio em 2 passos (mantido do seu código)
+  static Future<Map<String, dynamic>> criarSorteioDuploCompleto({
+    required DateTime data,
+    String? descricao,
+    required int quantidadeTimes,
+    required int quantidadeJogadoresTime,
+    required List<int> jogadoresIds,
+    Map<int, double>? mediasOverride,
+    bool requireMediaForUnrated = true,
+    double? limite,
+  }) async {
+    final url = Uri.parse('${ApiConfig.baseUrl}/sorteios/duplo-completo');
+
+    List<Map<String, dynamic>>? jogadoresArray;
+    if (mediasOverride != null && mediasOverride.isNotEmpty) {
+      jogadoresArray = jogadoresIds.map((id) {
+        if (mediasOverride.containsKey(id)) {
+          return {'id': id, 'media': mediasOverride[id]};
+        }
+        return {'id': id};
+      }).toList();
+    }
+
+    final body = <String, dynamic>{
+      'data': DateFormat('yyyy-MM-dd').format(data),
+      'descricao': descricao,
+      'quantidade_times': quantidadeTimes,
+      'quantidade_jogadores_time': quantidadeJogadoresTime,
+      'require_media_for_unrated': requireMediaForUnrated,
+      if (limite != null) 'limite': limite,
+      if (jogadoresArray != null)
+        'jogadores': jogadoresArray
+      else
+        'jogadores_ids': jogadoresIds,
+    };
+
+    final resp = await http.post(
+      url,
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ${await getToken()}',
+      },
+      body: jsonEncode(body),
+    );
+
+    if (resp.statusCode == 201 || resp.statusCode == 200) {
+      return jsonDecode(resp.body) as Map<String, dynamic>;
+    }
+
+    if (resp.statusCode == 422) {
+      final json = jsonDecode(resp.body);
+      if (json is Map && json['ids'] is List) {
+        final ids = (json['ids'] as List).map((e) => int.parse(e.toString())).toList();
+        throw NeedMediaException(ids, message: json['error']?.toString());
+      }
+      throw Exception(json['error'] ?? 'Erro de validação.');
+    }
+
+    throw Exception('Erro ${resp.statusCode}: ${resp.body}');
+  }
+
+  static Future<void> publicarDuplaPorIds({
+    required int sorteioId1,
+    required int sorteioId2,
+  }) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/publicar');
+    final resp = await http.post(
+      uri,
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ${await getToken()}',
+      },
+      body: jsonEncode({
+        'sorteio_id_1': sorteioId1,
+        'sorteio_id_2': sorteioId2,
+      }),
+    );
+
+    if (resp.statusCode != 200) {
+      throw Exception('Erro ao publicar: ${resp.body}');
+    }
+  }
+
+  static Future<bool> updateMeusDados(Map<String, dynamic> payload) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('jwt_token') ?? '';
+
+      final resp = await http.put(
+        Uri.parse('${ApiConfig.baseUrl}/meus-dados'),
         headers: {
-          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer ${await getToken()}',
+          'Accept': 'application/json',
         },
-        body: jsonEncode({
-          'sorteio_id_1': sorteioId1,
-          'sorteio_id_2': sorteioId2,
-        }),
+        body: jsonEncode(payload),
       );
 
-      if (resp.statusCode != 200) {
-        throw Exception('Erro ao publicar: ${resp.body}');
-      }
+      return resp.statusCode == 200;
+    } catch (_) {
+      return false;
     }
-    // lib/services/api_service.dart
-    static Future<bool> updateMeusDados(Map<String, dynamic> payload) async {
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        final token = prefs.getString('jwt_token') ?? '';
+  }
 
-        final resp = await http.put(
-          Uri.parse('${ApiConfig.baseUrl}/meus-dados'),
-          headers: {
-            'Authorization': 'Bearer $token',
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-          },
-          body: jsonEncode(payload),
-        );
-
-        if (resp.statusCode == 200) {
-          return true;
-        } else {
-          // opcional: log/print do body para debug
-          // print(resp.body);
-          return false;
-        }
-      } catch (_) {
-        return false;
-      }
+  static Future<bool> requestPasswordReset(String email) async {
+    try {
+      final r = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/password/forgot'),
+        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+        body: jsonEncode({'email': email}),
+      );
+      return r.statusCode == 200;
+    } catch (_) {
+      return false;
     }
+  }
 
-    
-    // lib/services/api_service.dart (trechos relevantes)
-
-    static Future<bool> requestPasswordReset(String email) async {
-      try {
-        final r = await http.post(
-          Uri.parse('${ApiConfig.baseUrl}/password/forgot'),
-          headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
-          body: jsonEncode({'email': email}),
-        );
-        return r.statusCode == 200;
-      } catch (_) {
-        return false;
+  static Future<String?> verifyResetCode({
+    required String email,
+    required String code,
+  }) async {
+    try {
+      final r = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/password/verify'),
+        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+        body: jsonEncode({'email': email, 'code': code}),
+      );
+      if (r.statusCode == 200) {
+        final json = jsonDecode(r.body) as Map<String, dynamic>;
+        return json['reset_token'] as String?;
       }
+      return null;
+    } catch (_) {
+      return null;
     }
+  }
 
-    /// 2) Verifica o código e devolve o reset_token (string) ou null
-    static Future<String?> verifyResetCode({
-      required String email,
-      required String code,
-    }) async {
-      try {
-        final r = await http.post(
-          Uri.parse('${ApiConfig.baseUrl}/password/verify'),
-          headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
-          body: jsonEncode({'email': email, 'code': code}),
-        );
-        if (r.statusCode == 200) {
-          final json = jsonDecode(r.body) as Map<String, dynamic>;
-          return json['reset_token'] as String?;
-        }
-        return null;
-      } catch (_) {
-        return null;
-      }
+  static Future<bool> resetPassword({
+    required String email,
+    required String resetToken,
+    required String newPassword,
+  }) async {
+    try {
+      final r = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/password/reset'),
+        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+        body: jsonEncode({
+          'email': email,
+          'reset_token': resetToken,
+          'password': newPassword,
+          'password_confirmation': newPassword,
+        }),
+      );
+      return r.statusCode == 200;
+    } catch (_) {
+      return false;
     }
-
-    /// 3) Faz o reset usando reset_token + confirmação
-    static Future<bool> resetPassword({
-      required String email,
-      required String resetToken,   // <- ATENÇÃO: reset_token (não "code")
-      required String newPassword,
-    }) async {
-      try {
-        final r = await http.post(
-          Uri.parse('${ApiConfig.baseUrl}/password/reset'),
-          headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
-          body: jsonEncode({
-            'email': email,
-            'reset_token': resetToken,
-            'password': newPassword,
-            'password_confirmation': newPassword,
-          }),
-        );
-        return r.statusCode == 200;
-      } catch (_) {
-        return false;
-      }
-    }
-
+  }
 }
-
-
-
-
-

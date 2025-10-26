@@ -1,11 +1,92 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+
+import '../../services/api_service.dart';
 import '../models/sorteio_detalhe_model.dart';
 
-class SorteioDetalhePage extends StatelessWidget {
+class SorteioDetalhePage extends StatefulWidget {
   final SorteioDetalhe sorteio;
 
   const SorteioDetalhePage({super.key, required this.sorteio});
+
+  @override
+  State<SorteioDetalhePage> createState() => _SorteioDetalhePageState();
+}
+
+class _SorteioDetalhePageState extends State<SorteioDetalhePage> {
+  int? _meuJogadorId;
+  bool _loadingUser = true;
+  bool _enviandoVoto = false;
+
+  // NOVO: controle do estado “já votei”
+  bool _jaVotei = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _carregarMeuJogador();
+  }
+
+  Future<void> _carregarMeuJogador() async {
+    try {
+      final me = await ApiService.getMeusDados();
+      setState(() {
+        _meuJogadorId = me['jogador']?['id'] as int?;
+        _loadingUser = false;
+      });
+    } catch (_) {
+      setState(() => _loadingUser = false);
+    }
+  }
+
+  bool get _souParticipante {
+    final id = _meuJogadorId;
+    if (id == null) return false;
+    for (final time in widget.sorteio.times) {
+      for (final j in time.jogadores) {
+        if (j.id == id) return true;
+      }
+    }
+    return false;
+  }
+
+  Future<void> _votar() async {
+    if (_meuJogadorId == null) return;
+
+    setState(() => _enviandoVoto = true);
+    try {
+      // OBS: se seu ApiService espera o jogadorId, use esta chamada:
+      await ApiService.votarNoSorteio(
+        sorteioId: widget.sorteio.id,
+        jogadorId: _meuJogadorId!,
+      );
+
+      if (!mounted) return;
+      setState(() => _jaVotei = true);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Voto computado com sucesso!')),
+      );
+
+      // Mostra o rótulo por um instante e volta
+      await Future.delayed(const Duration(milliseconds: 900));
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+
+      final msg = e.toString();
+      // Se o backend devolveu algo como “já votou…”, travamos o botão em “Voto registrado”
+      if (msg.toLowerCase().contains('já votou')) {
+        setState(() => _jaVotei = true);
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro ao votar: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _enviandoVoto = false);
+    }
+  }
 
   Icon _iconForPosition(String? posicao) {
     switch (posicao?.toLowerCase()) {
@@ -35,6 +116,18 @@ class SorteioDetalhePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final sorteio = widget.sorteio;
+
+    // Decide rótulo/estado do botão
+    final String botaoTexto = _loadingUser
+        ? 'Carregando...'
+        : (!_souParticipante)
+            ? 'Somente participantes podem votar'
+            : (_jaVotei ? 'Voto registrado' : 'Votar neste sorteio');
+
+    final bool botaoHabilitado =
+        !_loadingUser && _souParticipante && !_jaVotei && !_enviandoVoto;
+
     return Scaffold(
       appBar: AppBar(
         title: Column(
@@ -128,6 +221,20 @@ class SorteioDetalhePage extends StatelessWidget {
             ),
           );
         },
+      ),
+
+      // BOTÃO FIXO (vira “Voto registrado” após votar)
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          child: FilledButton.icon(
+            icon: _enviandoVoto
+                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                : Icon(_jaVotei ? Icons.verified : Icons.how_to_vote),
+            label: Text(botaoTexto),
+            onPressed: botaoHabilitado ? _votar : null,
+          ),
+        ),
       ),
     );
   }

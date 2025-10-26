@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../services/api_service.dart';
 import '../models/sorteio_detalhe_model.dart';
 import '../utils/app_date.dart';
 import '../screens/sorteio_page.dart';
+import '../models/jogador_sorteio_model.dart';
+import '../models/sorteio_time_model.dart';
 
 class RascunhosDiaPage extends StatefulWidget {
   const RascunhosDiaPage({Key? key}) : super(key: key);
@@ -110,27 +115,20 @@ class _RascunhosDiaPageState extends State<RascunhosDiaPage> {
     if (confirmar != true) return;
 
     try {
-      // Backend espera { sorteio_id_1, sorteio_id_2 }
       await ApiService.publicarDuplaPorIds(sorteioId1: id1, sorteioId2: id2);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Dupla publicada! Abrindo sorteios ativos...')),
       );
-          // Vá para a tela de Sorteios Ativos já recarregando a lista
-      // Use pushReplacement para substituir a tela atual,
-      // ou pushAndRemoveUntil para limpar toda a pilha.
-      Navigator.of(context).pushReplacement(
+
+      // Abre Sorteios Ativos
+      Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const SorteioPage()),
+        (route) => false,
       );
 
-      // Se preferir limpar a pilha inteira:
-      Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const SorteioPage()),
-      (route) => false,
-    );
-
-      // Recarrega (a dupla publicada deve deixar de aparecer como rascunho)
+      // Recarrega (defensivo)
       _carregar();
     } catch (e) {
       if (!mounted) return;
@@ -139,6 +137,108 @@ class _RascunhosDiaPageState extends State<RascunhosDiaPage> {
       );
     }
   }
+
+  // ---------- COMPARTILHAR ----------
+
+  Future<void> _shareText(String text) async {
+    // Tenta WhatsApp (wa.me). Se não rolar, cai no share sheet do SO.
+    final wa = Uri.parse('https://wa.me/?text=${Uri.encodeComponent(text)}');
+    try {
+      if (await canLaunchUrl(wa)) {
+        await launchUrl(wa, mode: LaunchMode.externalApplication);
+        return;
+      }
+    } catch (_) {}
+    await Share.share(text);
+  }
+
+  // Helpers de formatação “bonita”
+  String _bold(String s) => '*$s*';
+
+  String _fmtNum(double? v) =>
+      (v == null) ? '-' : v.toStringAsFixed(2).replaceAll('.', ',');
+
+  String _pad2(String? numero) {
+    if (numero == null || numero.trim().isEmpty) return '--';
+    final n = int.tryParse(numero) ?? -1;
+    if (n < 0) return numero; // se vier algo não numérico, devolve bruto
+    return n.toString().padLeft(2, '0');
+  }
+
+  /// Rótulo curto da posição, sem emoji.
+  String _posShort(String? pos) {
+    switch ((pos ?? '').toLowerCase()) {
+      case 'defesa':
+        return 'DEF';
+      case 'meio':
+        return 'MEI';
+      case 'ataque':
+        return 'ATA';
+      default:
+        return pos ?? '';
+    }
+  }
+
+  String _formatJogadorLinhaBonito(JogadorSorteio j) {
+    final numero = _pad2(j.numeroCamisa);
+    final nome = j.apelido?.trim().isNotEmpty == true
+        ? j.apelido!
+        : (j.nome ?? 'Jogador');
+    final pos = _posShort(j.posicao);
+    final posTxt = pos.isNotEmpty ? ' ($pos)' : '';
+    return '• $numero – $nome$posTxt';
+  }
+
+  String _formatTimeBonito(SorteioTime t) {
+    final buffer = StringBuffer();
+    final media = _fmtNum(t.mediaCalculada ?? t.media); // compat com seu modelo
+    buffer.writeln('${_bold(t.nome ?? 'Time')} (média $media)');
+    for (final j in t.jogadores) {
+      buffer.writeln(_formatJogadorLinhaBonito(j));
+    }
+    return buffer.toString().trimRight();
+  }
+
+  String _formatSorteioBonito(SorteioDetalhe s) {
+    final buffer = StringBuffer();
+    buffer.writeln('${_bold('Sorteio nº ${s.numero} • ${AppDate.brFromApi(s.data)}')}');
+    if ((s.descricao ?? '').isNotEmpty) buffer.writeln(s.descricao!.trim());
+    for (final t in s.times) {
+      buffer.writeln();
+      buffer.writeln(_formatTimeBonito(t));
+    }
+    return buffer.toString().trimRight();
+  }
+
+  String _formatTentativaBonito(List<SorteioDetalhe> par) {
+    if (par.isEmpty) return '';
+    final tentativa = par.first.tentativa ?? 0;
+    final data = AppDate.brFromApi(par.first.data);
+
+    final buffer = StringBuffer();
+    buffer.writeln(_bold('Pelada Chori — Tentativa $tentativa ($data)'));
+    for (final s in par) {
+      buffer.writeln();
+      buffer.writeln(_formatSorteioBonito(s));
+    }
+    buffer.writeln();
+    buffer.write('— enviado pelo app Pelada Chori');
+    return buffer.toString();
+  }
+
+  Future<void> _shareTentativa(List<SorteioDetalhe> par) async {
+    final text = _formatTentativaBonito(par);
+    if (text.trim().isEmpty) return;
+    await _shareText(text);
+  }
+
+  Future<void> _shareSorteio(SorteioDetalhe s) async {
+    final text = _formatSorteioBonito(s);
+    if (text.trim().isEmpty) return;
+    await _shareText(text);
+  }
+
+  // ---------- UI ----------
 
   @override
   Widget build(BuildContext context) {
@@ -182,7 +282,7 @@ class _RascunhosDiaPageState extends State<RascunhosDiaPage> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // Cabeçalho (radio + “Tentativa X” + status)
+                              // Cabeçalho (radio + “Tentativa X” + status + share tentativa)
                               Row(
                                 children: [
                                   Radio<int>(
@@ -194,7 +294,7 @@ class _RascunhosDiaPageState extends State<RascunhosDiaPage> {
                                         : null,
                                   ),
                                   const SizedBox(width: 4),
-                                  Flexible(
+                                  Expanded(
                                     child: Text(
                                       'Tentativa ${tentativa ?? '-'}',
                                       style: theme.textTheme.titleMedium,
@@ -205,6 +305,14 @@ class _RascunhosDiaPageState extends State<RascunhosDiaPage> {
                                   Chip(
                                     label: Text(completa ? 'Par completo' : 'Incompleto'),
                                     visualDensity: VisualDensity.compact,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  IconButton(
+                                    tooltip: 'Compartilhar tentativa',
+                                    onPressed: par.isNotEmpty
+                                        ? () => _shareTentativa(par)
+                                        : null,
+                                    icon: const Icon(Icons.share),
                                   ),
                                 ],
                               ),
@@ -242,7 +350,7 @@ class _RascunhosDiaPageState extends State<RascunhosDiaPage> {
     );
   }
 
-  /// Card com *um sorteio* (título + data + times e jogadores).
+  /// Card com *um sorteio* (título + data + times e jogadores) + botão compartilhar sorteio.
   Widget _cardSorteio(SorteioDetalhe s) {
     final theme = Theme.of(context);
 
@@ -255,10 +363,10 @@ class _RascunhosDiaPageState extends State<RascunhosDiaPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Título + data do sorteio (sem timezone)
+            // Título + data do sorteio + share
             Row(
               children: [
-                Flexible(
+                Expanded(
                   child: Text(
                     'Rascunho • Sorteio nº ${s.numero}',
                     style: theme.textTheme.titleMedium,
@@ -269,6 +377,11 @@ class _RascunhosDiaPageState extends State<RascunhosDiaPage> {
                 Text(
                   AppDate.brFromApi(s.data),
                   style: theme.textTheme.bodySmall,
+                ),
+                IconButton(
+                  tooltip: 'Compartilhar sorteio',
+                  onPressed: () => _shareSorteio(s),
+                  icon: const Icon(Icons.share),
                 ),
               ],
             ),
@@ -285,14 +398,38 @@ class _RascunhosDiaPageState extends State<RascunhosDiaPage> {
 
             // Times e jogadores
             ...s.times.map((t) {
+              final mediaTxt = _fmtNum(t.mediaCalculada ?? t.media);
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    t.nome ?? 'Time',
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          t.nome ?? 'Time',
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      Container(
+                        padding:
+                            const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(10),
+                          color: theme.colorScheme.surface,
+                          border: Border.all(
+                            color: theme.colorScheme.outlineVariant,
+                          ),
+                        ),
+                        child: Text(
+                          'Média $mediaTxt',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 6),
                   ...t.jogadores.map((j) {
@@ -312,13 +449,13 @@ class _RascunhosDiaPageState extends State<RascunhosDiaPage> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              '${j.numeroCamisa} - ${j.apelido}',
+                              '${_pad2(j.numeroCamisa)} - ${j.apelido ?? j.nome ?? "Jogador"}',
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            j.posicao ?? '',
+                            _posShort(j.posicao),
                             style: const TextStyle(color: Colors.grey),
                           ),
                         ],

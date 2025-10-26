@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-
 import '../../services/api_service.dart';
 import '../screens/rascunhos_dia_page.dart';
 
@@ -23,7 +22,9 @@ class _SelecionarJogadoresPageState extends State<SelecionarJogadoresPage> {
   int _qtdJogadoresPorTime = 5;
   DateTime _data = DateTime.now();
   final TextEditingController _descricaoCtrl = TextEditingController();
-  String _estrategia = 'balanceado'; // outras opções no futuro
+  final FocusNode _descricaoFocus = FocusNode();
+  String? _descricaoError; // <- erro do campo obrigatório
+  String _estrategia = 'balanceado';
 
   // Estado
   bool _loading = true;
@@ -38,6 +39,7 @@ class _SelecionarJogadoresPageState extends State<SelecionarJogadoresPage> {
   @override
   void dispose() {
     _descricaoCtrl.dispose();
+    _descricaoFocus.dispose();
     super.dispose();
   }
 
@@ -68,7 +70,6 @@ class _SelecionarJogadoresPageState extends State<SelecionarJogadoresPage> {
         if (_selecionados.length < _necessarios) {
           _selecionados.add(jogadorId);
         } else {
-          // Capacidade atingida; ignora clique e avisa
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
@@ -87,7 +88,6 @@ class _SelecionarJogadoresPageState extends State<SelecionarJogadoresPage> {
   void _incTimes() => setState(() => _qtdTimes = (_qtdTimes + 1).clamp(1, 20));
   void _decTimes() => setState(() {
         if (_qtdTimes > 1) _qtdTimes--;
-        // Se reduzir a capacidade total, ajuste a seleção (evita ficar “excedida”)
         while (_selecionados.length > _necessarios) {
           _selecionados.remove(_selecionados.last);
         }
@@ -106,156 +106,174 @@ class _SelecionarJogadoresPageState extends State<SelecionarJogadoresPage> {
 
   Widget _buildConfigCard(BuildContext context) {
     final theme = Theme.of(context);
+
     return Card(
       margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       elevation: 2,
       child: Padding(
         padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Configurações do sorteio',
-                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isWideCounters = constraints.maxWidth >= 600; // counters lado a lado
+            final isWidePair = constraints.maxWidth >= 520; // estratégia+data lado a lado
+            final tituloJog = isWideCounters ? 'Jogadores/time' : 'Jog/time';
 
-            const SizedBox(height: 12),
-
-            Row(
-              children: [
-                Expanded(
-                  child: _CounterTile(
-                    titulo: 'Times',
-                    valor: _qtdTimes,
-                    onInc: _incTimes,
-                    onDec: _decTimes,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _CounterTile(
-                    titulo: 'Jogadores/time',
-                    valor: _qtdJogadoresPorTime,
-                    onInc: _incJogPorTime,
-                    onDec: _decJogPorTime,
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 12),
-
-            // Data + Estratégia
-            Row(
-              children: [
-                Expanded(
-                  child: InkWell(
-                    onTap: () async {
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate: _data,
-                        firstDate: DateTime(DateTime.now().year - 1),
-                        lastDate: DateTime(DateTime.now().year + 1),
-                      );
-                      if (picked != null) setState(() => _data = picked);
-                    },
-                    borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: theme.colorScheme.outlineVariant),
-                        borderRadius: BorderRadius.circular(10),
+            // --- Counters (Times / Jogadores por time) ---
+            final counters = isWideCounters
+                ? Row(
+                    children: [
+                      Expanded(
+                        child: _CounterTile(
+                          titulo: 'Times',
+                          valor: _qtdTimes,
+                          onInc: _incTimes,
+                          onDec: _decTimes,
+                          compact: true,
+                        ),
                       ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.event),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Data: ${DateFormat('dd/MM/yyyy').format(_data)}',
-                            style: theme.textTheme.bodyMedium,
-                          ),
-                          const Spacer(),
-                          const Icon(Icons.edit_calendar, size: 18),
-                        ],
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _CounterTile(
+                          titulo: tituloJog,
+                          valor: _qtdJogadoresPorTime,
+                          onInc: _incJogPorTime,
+                          onDec: _decJogPorTime,
+                          compact: true,
+                        ),
                       ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: InputDecorator(
-                    decoration: InputDecoration(
-                      labelText: 'Estratégia',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
+                    ],
+                  )
+                : Column(
+                    children: [
+                      _CounterTile(
+                        titulo: 'Times',
+                        valor: _qtdTimes,
+                        onInc: _incTimes,
+                        onDec: _decTimes,
+                        compact: true,
+                      ),
+                      const SizedBox(height: 10),
+                      _CounterTile(
+                        titulo: tituloJog,
+                        valor: _qtdJogadoresPorTime,
+                        onInc: _incJogPorTime,
+                        onDec: _decJogPorTime,
+                        compact: true,
+                      ),
+                    ],
+                  );
+
+            // --- Estratégia + Data (responsivo) ---
+            final pair = isWidePair
+                ? Row(
+                    children: [
+                      Expanded(
+                        child: _StrategyField(
+                          value: _estrategia,
+                          onChanged: (v) => setState(() => _estrategia = v ?? 'balanceado'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(child: _DateField(date: _data, onPick: _pickDate)),
+                    ],
+                  )
+                : Column(
+                    children: [
+                      _StrategyField(
                         value: _estrategia,
-                        isDense: true,
                         onChanged: (v) => setState(() => _estrategia = v ?? 'balanceado'),
-                        items: const [
-                          DropdownMenuItem(
-                            value: 'balanceado',
-                            child: Text('Balanceado'),
-                          ),
-                          // Futuras estratégias podem entrar aqui
-                        ],
+                        compact: true,
                       ),
-                    ),
+                      const SizedBox(height: 10),
+                      _DateField(date: _data, onPick: _pickDate, compact: true),
+                    ],
+                  );
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Configurações do sorteio',
+                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+
+                const SizedBox(height: 12),
+
+                counters,
+
+                const SizedBox(height: 12),
+
+                pair,
+
+                const SizedBox(height: 12),
+
+                // DESCRIÇÃO — obrigatório
+                TextField(
+                  controller: _descricaoCtrl,
+                  focusNode: _descricaoFocus,
+                  maxLength: 80,
+                  onChanged: (_) {
+                    if (_descricaoError != null) {
+                      setState(() => _descricaoError = null);
+                    }
+                  },
+                  decoration: InputDecoration(
+                    labelText: 'Descrição (*)',
+                    errorText: _descricaoError,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    hintText: 'Ex.: Sorteio semanal da terça-feira',
                   ),
                 ),
+
+                const SizedBox(height: 8),
+
+                // Indicadores
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Selecionados: $_selecionadosQtde', style: theme.textTheme.bodyMedium),
+                    Text('Necessários: $_necessarios',
+                        style:
+                            theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+                  ],
+                ),
+
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: LinearProgressIndicator(
+                    minHeight: 8,
+                    value: _necessarios == 0 ? 0 : _selecionadosQtde / _necessarios,
+                    backgroundColor: theme.colorScheme.surfaceVariant,
+                  ),
+                ),
+
+                const SizedBox(height: 8),
+                if (_faltam > 0)
+                  Text(
+                    'Faltam $_faltam jogador(es) para completar a capacidade.',
+                    style: theme.textTheme.bodySmall?.copyWith(color: Colors.orange[800]),
+                  )
+                else
+                  Text(
+                    'Capacidade completa!',
+                    style: theme.textTheme.bodySmall?.copyWith(color: Colors.green[800]),
+                  ),
               ],
-            ),
-
-            const SizedBox(height: 12),
-
-            TextField(
-              controller: _descricaoCtrl,
-              maxLength: 80,
-              decoration: InputDecoration(
-                labelText: 'Descrição (opcional)',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                hintText: 'Ex.: Sorteio semanal da terça-feira',
-              ),
-            ),
-
-            const SizedBox(height: 8),
-
-            // Indicadores
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Selecionados: $_selecionadosQtde', style: theme.textTheme.bodyMedium),
-                Text('Necessários: $_necessarios',
-                    style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
-              ],
-            ),
-
-            const SizedBox(height: 8),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: LinearProgressIndicator(
-                minHeight: 8,
-                value: _necessarios == 0 ? 0 : _selecionadosQtde / _necessarios,
-                backgroundColor: theme.colorScheme.surfaceVariant,
-              ),
-            ),
-
-            const SizedBox(height: 8),
-            if (_faltam > 0)
-              Text(
-                'Faltam $_faltam jogador(es) para completar a capacidade.',
-                style: theme.textTheme.bodySmall?.copyWith(color: Colors.orange[800]),
-              )
-            else
-              Text(
-                'Capacidade completa!',
-                style: theme.textTheme.bodySmall?.copyWith(color: Colors.green[800]),
-              ),
-          ],
+            );
+          },
         ),
       ),
     );
+  }
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _data,
+      firstDate: DateTime(DateTime.now().year - 1),
+      lastDate: DateTime(DateTime.now().year + 1),
+    );
+    if (picked != null) setState(() => _data = picked);
   }
 
   Widget _buildJogadorItem(Map<String, dynamic> jogador) {
@@ -280,18 +298,123 @@ class _SelecionarJogadoresPageState extends State<SelecionarJogadoresPage> {
     );
   }
 
-  // --------- Envio ao backend ---------
+  // --------- Envio ao backend (two-step) ---------
+
+  /// Dialog que coleta as médias dos IDs faltantes.
+  Future<Map<int, double>?> _pedirMediasFaltantes({
+    required List<int> idsFaltantes,
+  }) async {
+    // montar mapa id->nome para exibir
+    final nomesPorId = <int, String>{};
+    for (final j in _jogadores) {
+      final id = (j['id'] as num).toInt();
+      if (idsFaltantes.contains(id)) {
+        final apelido = (j['apelido'] ?? '') as String;
+        final nome = (j['nome'] ?? '') as String;
+        final rotulo = (apelido.trim().isNotEmpty ? apelido : nome).trim();
+        nomesPorId[id] = rotulo.isNotEmpty ? rotulo : 'Jogador $id';
+      }
+    }
+
+    final formKey = GlobalKey<FormState>();
+    final Map<int, TextEditingController> ctrls = {
+      for (final id in idsFaltantes) id: TextEditingController(text: '3,00'),
+    };
+
+    Map<int, double>? parseMedias() {
+      final out = <int, double>{};
+      for (final id in idsFaltantes) {
+        final raw = ctrls[id]!.text.trim().replaceAll(',', '.');
+        final v = double.tryParse(raw);
+        if (v == null || v < 0 || v > 5) return null;
+        out[id] = double.parse(v.toStringAsFixed(2));
+      }
+      return out;
+    }
+
+    final result = await showDialog<Map<int, double>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('Informar médias dos convidados'),
+          content: Form(
+            key: formKey,
+            child: SizedBox(
+              width: 380,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: idsFaltantes.map((id) {
+                    final nome = nomesPorId[id] ?? 'Jogador $id';
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: TextFormField(
+                        controller: ctrls[id],
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: InputDecoration(
+                          labelText: '$nome (ID $id)',
+                          hintText: '0,00 a 5,00',
+                        ),
+                        validator: (v) {
+                          final raw = (v ?? '').trim().replaceAll(',', '.');
+                          final val = double.tryParse(raw);
+                          if (val == null) return 'Informe um número';
+                          if (val < 0 || val > 5) return '0 a 5';
+                          return null;
+                        },
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, null),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (!formKey.currentState!.validate()) return;
+                final m = parseMedias();
+                if (m == null) return;
+                Navigator.pop(ctx, m);
+              },
+              child: const Text('Usar estas médias'),
+            ),
+          ],
+        );
+      },
+    );
+
+    for (final c in ctrls.values) {
+      c.dispose();
+    }
+    return result;
+  }
 
   Future<void> _gerarDuplo() async {
     final qtdTimes = _qtdTimes;
     final qtdPorTime = _qtdJogadoresPorTime;
     final totalNecessario = _necessarios;
-
     final selecionados = _selecionados.toList();
 
+    // validações
     if (qtdTimes <= 0 || qtdPorTime <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Informe quantidades válidas.')),
+      );
+      return;
+    }
+
+    final desc = _descricaoCtrl.text.trim();
+    if (desc.isEmpty) {
+      setState(() => _descricaoError = 'Informe a descrição');
+      _descricaoFocus.requestFocus();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('O campo Descrição é obrigatório.')),
       );
       return;
     }
@@ -305,34 +428,60 @@ class _SelecionarJogadoresPageState extends State<SelecionarJogadoresPage> {
 
     setState(() => _sending = true);
 
-    try {
-      await ApiService.criarDuploCompleto(
-        data: _data,
-        descricao: _descricaoCtrl.text.trim().isEmpty ? null : _descricaoCtrl.text.trim(),
-        quantidadeTimes: qtdTimes,
-        quantidadeJogadoresTime: qtdPorTime,
-        jogadoresIds: selecionados,
-        estrategia: _estrategia,
-      );
+    Map<int, double>? overrides; // id -> média (para os sem nota)
 
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Dois rascunhos gerados com sucesso!')),
-      );
+    while (true) {
+      try {
+        // NOVO método com require_media_for_unrated
+        await ApiService.criarSorteioDuploCompleto(
+          data: _data,
+          descricao: desc,
+          quantidadeTimes: qtdTimes,
+          quantidadeJogadoresTime: qtdPorTime,
+          jogadoresIds: selecionados,
+          mediasOverride: overrides,
+          requireMediaForUnrated: true,
+        );
 
-      // Levar o usuário para revisar os rascunhos do dia:
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const RascunhosDiaPage()),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro ao gerar sorteios: $e')),
-      );
-    } finally {
-      if (mounted) setState(() => _sending = false);
+        if (!mounted) return;
+        setState(() => _sending = false);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Dois rascunhos gerados com sucesso!')),
+        );
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const RascunhosDiaPage()),
+        );
+        return;
+
+      } on NeedMediaException catch (e) {
+        // pede as médias e repete o loop
+        setState(() => _sending = false);
+
+        final coletadas = await _pedirMediasFaltantes(idsFaltantes: e.ids);
+        if (coletadas == null) {
+          _snack('Operação cancelada.');
+          return;
+        }
+        overrides ??= {};
+        overrides.addAll(coletadas);
+
+        setState(() => _sending = true);
+        // loop continua e reenviará com overrides
+
+      } catch (e) {
+        if (!mounted) return;
+        setState(() => _sending = false);
+        _snack('Erro ao gerar sorteios: $e');
+        return;
+      }
     }
+  }
+
+  void _snack(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   @override
@@ -384,12 +533,12 @@ class _SelecionarJogadoresPageState extends State<SelecionarJogadoresPage> {
   }
 }
 
-/// Mini-componente para o controle de quantidade com +/-
 class _CounterTile extends StatelessWidget {
   final String titulo;
   final int valor;
   final VoidCallback onInc;
   final VoidCallback onDec;
+  final bool compact;
 
   const _CounterTile({
     Key? key,
@@ -397,36 +546,160 @@ class _CounterTile extends StatelessWidget {
     required this.valor,
     required this.onInc,
     required this.onDec,
+    this.compact = false,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
+    final minusBtn = IconButton(
+      icon: const Icon(Icons.remove),
+      onPressed: onDec,
+      tooltip: 'Diminuir',
+      visualDensity: compact ? VisualDensity.compact : VisualDensity.standard,
+      padding: compact ? const EdgeInsets.all(6) : null,
+      constraints:
+          compact ? const BoxConstraints(minWidth: 36, minHeight: 36) : const BoxConstraints(),
+    );
+
+    final plusBtn = IconButton(
+      icon: const Icon(Icons.add),
+      onPressed: onInc,
+      tooltip: 'Aumentar',
+      visualDensity: compact ? VisualDensity.compact : VisualDensity.standard,
+      padding: compact ? const EdgeInsets.all(6) : null,
+      constraints:
+          compact ? const BoxConstraints(minWidth: 36, minHeight: 36) : const BoxConstraints(),
+    );
+
+    final numberText = Text(
+      '$valor',
+      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+    );
+
     return Container(
       decoration: BoxDecoration(
         border: Border.all(color: theme.colorScheme.outlineVariant),
         borderRadius: BorderRadius.circular(10),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      child: Row(
-        children: [
-          Text(titulo, style: theme.textTheme.bodyMedium),
-          const Spacer(),
-          IconButton(
-            icon: const Icon(Icons.remove),
-            onPressed: onDec,
-            tooltip: 'Diminuir',
-          ),
-          Text(
-            '$valor',
-            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-          ),
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: onInc,
-            tooltip: 'Aumentar',
-          ),
-        ],
+      padding: compact
+          ? const EdgeInsets.symmetric(horizontal: 10, vertical: 8)
+          : const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: compact
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(titulo, style: theme.textTheme.bodySmall),
+                const SizedBox(height: 6),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    minusBtn,
+                    numberText,
+                    plusBtn,
+                  ],
+                ),
+              ],
+            )
+          : Row(
+              children: [
+                Text(titulo, style: theme.textTheme.bodyMedium),
+                const Spacer(),
+                minusBtn,
+                numberText,
+                plusBtn,
+              ],
+            ),
+    );
+  }
+}
+
+class _StrategyField extends StatelessWidget {
+  final String value;
+  final ValueChanged<String?> onChanged;
+  final bool compact;
+
+  const _StrategyField({
+    Key? key,
+    required this.value,
+    required this.onChanged,
+    this.compact = false,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final contentPadding =
+        compact ? const EdgeInsets.symmetric(horizontal: 12, vertical: 8) : const EdgeInsets.symmetric(horizontal: 12, vertical: 10);
+
+    return InputDecorator(
+      decoration: InputDecoration(
+        labelText: 'Estratégia',
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        contentPadding: contentPadding,
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: value,
+          isDense: true,
+          onChanged: onChanged,
+          items: const [
+            DropdownMenuItem(
+              value: 'balanceado',
+              child: Text('Balanceado'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DateField extends StatelessWidget {
+  final DateTime date;
+  final VoidCallback onPick;
+  final bool compact;
+
+  const _DateField({
+    Key? key,
+    required this.date,
+    required this.onPick,
+    this.compact = false,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final pad =
+        compact ? const EdgeInsets.symmetric(horizontal: 12, vertical: 10) : const EdgeInsets.symmetric(horizontal: 12, vertical: 12);
+
+    return InkWell(
+      onTap: onPick,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: pad,
+        decoration: BoxDecoration(
+          border: Border.all(color: theme.colorScheme.outlineVariant),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.event),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Data: ${DateFormat('dd/MM/yyyy').format(date)}',
+                style: theme.textTheme.bodyMedium,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                softWrap: false,
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(Icons.edit_calendar, size: 18),
+          ],
+        ),
       ),
     );
   }
