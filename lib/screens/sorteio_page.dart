@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../services/api_service.dart';
-import '../models/sorteio_simplificado_model.dart';
+import '../models/sorteio_simplificado_model.dart'; // ainda usado no detalhe de navegação antiga
 import 'selecionar_jogadores_page.dart';
 import 'sorteio_detalhe_page.dart';
 import '../models/sorteio_detalhe_model.dart';
@@ -16,17 +16,15 @@ class SorteioPage extends StatefulWidget {
 }
 
 class _SorteioPageState extends State<SorteioPage> {
-  List<SorteioSimplificadoModel> _sorteios = [];
-  bool _loading = true;
-
-  // rascunhos hoje?
-  bool _temRascunhosHoje = false;
-
-  // votos (id => total) e votantes (id => lista)
-  Map<int, int> _votosHoje = {};
+  // Agora trabalharemos diretamente com os DETALHES (vem com times/jogadores)
+  List<SorteioDetalhe> _sorteios = [];
+  Map<int, int> _votosHoje = {}; // id => votos_count (vem do endpoint)
   Map<int, List<Map<String, dynamic>>> _votantesPorSorteio = {};
 
-  // estado do botão encerrar
+  String _modo = 'vazio'; // 'votacao' | 'confirmado' | 'vazio'
+  bool _temRascunhosHoje = false;
+
+  bool _loading = true;
   bool _encerrando = false;
 
   int get _totalVotosHoje =>
@@ -41,34 +39,25 @@ class _SorteioPageState extends State<SorteioPage> {
   Future<void> _carregarTudo() async {
     setState(() => _loading = true);
     try {
-      await _carregarSorteios();
-      await Future.wait([
-        _carregarResumoVotos(),
-        _carregarDetalhesDeCadaSorteio(),
-      ]);
+      await _carregarDoDia(); // carrega sorteios (votação ou confirmados) + votos_count
+      await _carregarFacepile(); // opcional: busca lista de votantes para o facepile
       await _verificarRascunhosHoje();
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  Future<void> _carregarSorteios() async {
-    final sorteios = await ApiService.getSorteiosAtivos();
+  Future<void> _carregarDoDia() async {
+    final res = await ApiService.getExibirDoDia();
     if (!mounted) return;
     setState(() {
-      _sorteios = sorteios;
+      _modo = res.modo;
+      _sorteios = res.sorteios;
+      _votosHoje = res.votosPorId;
     });
   }
 
-  Future<void> _carregarResumoVotos() async {
-    try {
-      final resumo = await ApiService.getResumoVotosHoje();
-      if (!mounted) return;
-      setState(() => _votosHoje = resumo);
-    } catch (_) {}
-  }
-
-  Future<void> _carregarDetalhesDeCadaSorteio() async {
+  Future<void> _carregarFacepile() async {
     if (_sorteios.isEmpty) return;
     try {
       final results = await Future.wait(
@@ -81,6 +70,7 @@ class _SorteioPageState extends State<SorteioPage> {
         final s = _sorteios[i];
         final r = results[i];
         byId[s.id] = (r['votos'] as List).cast<Map<String, dynamic>>();
+        // mantém total coerente mesmo se backend mudar entre chamadas
         totals[s.id] = r['total'] as int;
       }
 
@@ -177,7 +167,7 @@ class _SorteioPageState extends State<SorteioPage> {
 
     return SizedBox(
       height: 28,
-      width: width, // largura finita para a Stack
+      width: width,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
@@ -309,7 +299,6 @@ class _SorteioPageState extends State<SorteioPage> {
   }
 
   // ---------- Encerrar votação (com empate) ----------
-
   Future<void> _confirmarEncerramento() async {
     if (_sorteios.length != 2) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -380,7 +369,6 @@ class _SorteioPageState extends State<SorteioPage> {
 
   Future<int?> _dialogEscolherVencedorEmCasoDeEmpate(
       List<Map<String, dynamic>> empate) async {
-    // empate: [{id, votos}, {id, votos}]
     final m = {for (final s in _sorteios) s.id: s};
     int? selecionado = (empate.isNotEmpty ? empate.first['id'] as int? : null);
 
@@ -420,12 +408,13 @@ class _SorteioPageState extends State<SorteioPage> {
 
   // ---------- item ----------
 
-  Widget _buildSorteioItem(SorteioSimplificadoModel sorteio) {
+  Widget _buildSorteioItem(SorteioDetalhe sorteio) {
     final dataFormatada = AppDate.brFromApi(sorteio.data);
     final votosEste = _votosHoje[sorteio.id] ?? 0;
 
     return GestureDetector(
       onTap: () async {
+        // já temos os times/jogadores; mas podemos recarregar para garantir frescor
         final detalhe = await ApiService.getSorteioDetalhe(sorteio.id);
         if (!mounted) return;
 
@@ -473,22 +462,21 @@ class _SorteioPageState extends State<SorteioPage> {
                   ),
                   const SizedBox(height: 8),
                   Text('Data: $dataFormatada'),
-                  if (sorteio.descricao.isNotEmpty)
+                  if ((sorteio.descricao ?? '').isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 4),
                       child: Text(
-                        sorteio.descricao,
+                        sorteio.descricao!,
                         style: const TextStyle(color: Colors.grey),
                       ),
                     ),
 
-                  // barra estilo "enquete"
-                  if (_votosHoje.isNotEmpty)
-                    _pollBar(
-                      votosDoSorteio: votosEste,
-                      votosTotais: _totalVotosHoje,
-                      onMostrarVotos: () => _mostrarVotantesDeSorteio(sorteio.id),
-                    ),
+                  // barra estilo "enquete" (mostra mesmo em 'confirmado', como informação)
+                  _pollBar(
+                    votosDoSorteio: votosEste,
+                    votosTotais: _totalVotosHoje == 0 ? votosEste : _totalVotosHoje,
+                    onMostrarVotos: () => _mostrarVotantesDeSorteio(sorteio.id),
+                  ),
 
                   const Align(
                     alignment: Alignment.bottomRight,
@@ -498,24 +486,46 @@ class _SorteioPageState extends State<SorteioPage> {
               ),
             ),
           ),
-          Positioned(
-            top: 0,
-            right: 0,
-            child: Container(
-              decoration: const BoxDecoration(
-                color: Colors.redAccent,
-                borderRadius: BorderRadius.only(
-                  topRight: Radius.circular(16),
-                  bottomLeft: Radius.circular(8),
+
+          // selo no canto direito conforme modo
+          if (_modo == 'votacao')
+            Positioned(
+              top: 0,
+              right: 0,
+              child: Container(
+                decoration: const BoxDecoration(
+                  color: Colors.redAccent,
+                  borderRadius: BorderRadius.only(
+                    topRight: Radius.circular(16),
+                    bottomLeft: Radius.circular(8),
+                  ),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: const Text(
+                  'ABERTO',
+                  style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
                 ),
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              child: const Text(
-                'ABERTO',
-                style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+            )
+          else if (_modo == 'confirmado')
+            Positioned(
+              top: 0,
+              right: 0,
+              child: Container(
+                decoration: const BoxDecoration(
+                  color: Colors.green,
+                  borderRadius: BorderRadius.only(
+                    topRight: Radius.circular(16),
+                    bottomLeft: Radius.circular(8),
+                  ),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: const Text(
+                  'CONFIRMADO',
+                  style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
@@ -528,7 +538,7 @@ class _SorteioPageState extends State<SorteioPage> {
     final bodyList = _loading
         ? const Center(child: CircularProgressIndicator())
         : _sorteios.isEmpty
-            ? const Center(child: Text('Nenhum sorteio disponivel para votaçao.'))
+            ? const Center(child: Text('Nenhum sorteio disponível hoje.'))
             : ListView.builder(
                 padding: const EdgeInsets.only(bottom: 96),
                 itemCount: _sorteios.length,
@@ -537,14 +547,18 @@ class _SorteioPageState extends State<SorteioPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Sorteios Ativos'),
+        title: Text(_modo == 'votacao'
+            ? 'Sorteios em votação'
+            : _modo == 'confirmado'
+                ? 'Sorteios confirmados'
+                : 'Sorteios do dia'),
         actions: [
           IconButton(
             tooltip: 'Rascunhos de hoje',
             icon: const Icon(Icons.description_outlined),
             onPressed: _abrirRascunhos,
           ),
-          if (_sorteios.length == 2)
+          if (_modo == 'votacao' && _sorteios.length == 2)
             IconButton(
               tooltip: 'Encerrar votação do dia',
               icon: _encerrando
@@ -565,6 +579,18 @@ class _SorteioPageState extends State<SorteioPage> {
         onRefresh: _carregarTudo,
         child: Column(
           children: [
+            if (_modo == 'confirmado')
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: Card(
+                  color: Theme.of(context).colorScheme.secondaryContainer,
+                  child: const ListTile(
+                    leading: Icon(Icons.verified),
+                    title: Text('Mostrando os sorteios confirmados de hoje'),
+                    subtitle: Text('As partidas poderão ser registradas a partir daqui.'),
+                  ),
+                ),
+              ),
             if (_temRascunhosHoje)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
