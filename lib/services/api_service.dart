@@ -60,6 +60,7 @@ class ApiService {
     }
   }
 
+  // --- ANTIGOS (ainda usados em alguns fluxos) ---
   static Future<List<SorteioSimplificadoModel>> getSorteiosAtivos() async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/ativos');
     final response = await http.get(
@@ -96,6 +97,43 @@ class ApiService {
 
   static String _ymd(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  /// NOVO: endpoint "inteligente" — votacao → retorna votando; senão → confirmados
+  /// Resposta:
+  /// { modo: "votacao"|"confirmado"|"vazio", sorteios: [...], data: "YYYY-MM-DD" }
+  /// Cada item tem "votos_count" e estrutura de SorteioDetalhe (com times/jogadores).
+  static Future<({
+    String modo,
+    List<SorteioDetalhe> sorteios,
+    Map<int, int> votosPorId,
+  })> getExibirDoDia({DateTime? data}) async {
+    final d = data ?? DateTime.now();
+    final uri = Uri.parse(
+        '${ApiConfig.baseUrl}/sorteios/exibir-do-dia?data=${_ymd(d)}');
+    final resp = await http.get(uri, headers: await _authHeaders());
+
+    if (resp.statusCode != 200) {
+      throw Exception('Erro ao buscar sorteios do dia: ${resp.body}');
+    }
+
+    final body = jsonDecode(resp.body) as Map<String, dynamic>;
+    final modo = (body['modo'] as String?) ?? 'vazio';
+    final list = (body['sorteios'] as List? ?? const [])
+        .map((e) => e as Map<String, dynamic>)
+        .toList();
+
+    final sorteios = <SorteioDetalhe>[];
+    final votos = <int, int>{};
+
+    for (final m in list) {
+      final s = SorteioDetalhe.fromJson(m);
+      sorteios.add(s);
+      final vc = (m['votos_count'] is num) ? (m['votos_count'] as num).toInt() : 0;
+      votos[s.id] = vc;
+    }
+
+    return (modo: modo, sorteios: sorteios, votosPorId: votos);
+  }
 
   /// Publica a dupla mais recente do dia para votação
   static Future<void> publicarDupla(DateTime data) async {
@@ -140,7 +178,7 @@ class ApiService {
   /// Encerrar votação do dia (com suporte a empate via vencedorId)
   static Future<Map<String, dynamic>> fecharVotacaoDoDia({
     required DateTime data,
-    int? vencedorId, // opcional para resolver empate
+    int? vencedorId,
   }) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/fechar-votacao');
 
@@ -193,7 +231,6 @@ class ApiService {
       return;
     }
 
-    // Erros amigáveis do backend
     try {
       final j = jsonDecode(response.body);
       if (j is Map && j['message'] is String) {
@@ -256,7 +293,7 @@ class ApiService {
     final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/rascunhos-dia');
     final resp = await http.get(uri, headers: await _authHeaders());
 
-    if (resp.statusCode == 200) {
+    if (resp.statusCode == 200 || resp.statusCode == 200) { // proteção
       final raw = jsonDecode(resp.body);
       if (raw is List) {
         return raw.map<SorteioDetalhe>((e) => SorteioDetalhe.fromJson(e)).toList();
