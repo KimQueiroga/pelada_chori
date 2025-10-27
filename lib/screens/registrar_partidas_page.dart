@@ -43,7 +43,6 @@ class _RegistrarPartidasPageState extends State<RegistrarPartidasPage> {
     );
     if (criada != null) {
       setState(() => _partidas = [criada, ..._partidas]);
-      // opcional: abrir já a tela de jogo
       _abrirPartida(criada);
     }
   }
@@ -56,6 +55,98 @@ class _RegistrarPartidasPageState extends State<RegistrarPartidasPage> {
     await _carregar();
   }
 
+  // ----------------- UI helpers -----------------
+
+  /// Rotulo curto ao estilo "FT", "LIVE", "AGENDADA"
+  String _statusRotulo(Partida p) {
+    switch (p.status.toLowerCase()) {
+      case 'encerrada':
+        return 'CLOSED';
+      case 'em_andamento':
+        return 'LIVE';
+      case 'agendada':
+      default:
+        return 'AGENDADA';
+    }
+  }
+
+  /// Cor do chip de status
+  Color _statusCor(Partida p, BuildContext ctx) {
+    final s = p.status.toLowerCase();
+    if (s == 'encerrada') {
+      return Theme.of(ctx).colorScheme.secondary;
+    }
+    if (s == 'em_andamento') {
+      return Theme.of(ctx).colorScheme.primary;
+    }
+    return Theme.of(ctx).colorScheme.outline; // agendada
+  }
+
+  /// Data para agrupar/exibir: encerrada > iniciada > criada > agora
+  DateTime _dataDeExibicao(Partida p) =>
+      p.encerradaEm ?? p.iniciadaEm ?? p.createdAt ?? DateTime.now();
+
+  // ----------------- row -----------------
+
+  Widget _partidaRow(Partida p) {
+    final statusChip = Chip(
+      label: Text(_statusRotulo(p)),
+      visualDensity: VisualDensity.compact,
+      backgroundColor: _statusCor(p, context).withOpacity(.12),
+      labelStyle: TextStyle(
+        color: _statusCor(p, context),
+        fontWeight: FontWeight.w700,
+        fontSize: 11,
+      ),
+      side: BorderSide(color: _statusCor(p, context).withOpacity(.35)),
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+    );
+
+    return ListTile(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      tileColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      title: Row(
+        children: [
+          Expanded(
+            child: Text(
+              '${p.nomeA()}  ${p.placarA}  x  ${p.placarB}  ${p.nomeB()}',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+          statusChip,
+        ],
+      ),
+      subtitle: Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Text(
+          // exibe: “Hoje 14:07”, “Ontem 20:15”, ou “27/10 03:41”
+          _formatWhen(_dataDeExibicao(p)),
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ),
+      trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+      onTap: () => _abrirPartida(p),
+    );
+  }
+
+  String _formatWhen(DateTime dt) {
+    final now = DateTime.now();
+    final d = DateTime(dt.year, dt.month, dt.day);
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+
+    String hh = dt.hour.toString().padLeft(2, '0');
+    String mm = dt.minute.toString().padLeft(2, '0');
+    final hm = '$hh:$mm';
+
+    if (d == today) return 'Hoje $hm';
+    if (d == yesterday) return 'Ontem $hm';
+    return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')} $hm';
+  }
+
+  // ----------------- build -----------------
+
   @override
   Widget build(BuildContext context) {
     final body = _loading
@@ -66,25 +157,13 @@ class _RegistrarPartidasPageState extends State<RegistrarPartidasPage> {
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
                 itemCount: _partidas.length,
                 separatorBuilder: (_, __) => const SizedBox(height: 10),
-                itemBuilder: (_, i) {
-                  final p = _partidas[i];
-                  return ListTile(
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    tileColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                    title: Text('${p.timeANome}  ${p.placarA}  x  ${p.placarB}  ${p.timeBNome}'),
-                    subtitle: Text(p.status == 'em_andamento'
-                        ? 'Em andamento'
-                        : p.status == 'encerrado'
-                            ? 'Encerrada'
-                            : 'Criada'),
-                    trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                    onTap: () => _abrirPartida(p),
-                  );
-                },
+                itemBuilder: (_, i) => _partidaRow(_partidas[i]),
               );
 
     return Scaffold(
-      appBar: AppBar(title: Text('Partidas — Sorteio nº ${widget.sorteio.numero}')),
+      appBar: AppBar(
+        title: Text('Partidas — Sorteio nº ${widget.sorteio.numero}'),
+      ),
       body: RefreshIndicator(onRefresh: _carregar, child: body),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _novaPartida,
