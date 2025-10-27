@@ -4,6 +4,7 @@ import '../config/api_config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/sorteio_simplificado_model.dart';
 import '../models/sorteio_detalhe_model.dart';
+import '../models/partida_model.dart';
 import 'package:intl/intl.dart';
 
 /// Exceção específica quando o backend exige médias manuais.
@@ -426,6 +427,121 @@ class ApiService {
       throw Exception('Erro ao publicar: ${resp.body}');
     }
   }
+
+    // ===== PARTIDAS =====
+
+  // Lista times de um sorteio (com jogadores) para montar confrontos
+  static Future<List<Map<String, dynamic>>> getTimesDoSorteio(int sorteioId) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/$sorteioId/times');
+    final resp = await http.get(uri, headers: await _authHeaders());
+    if (resp.statusCode == 200) {
+      final list = (jsonDecode(resp.body) as List).cast<Map<String, dynamic>>();
+      return list;
+    }
+    throw Exception('Erro ao carregar times do sorteio: ${resp.body}');
+  }
+
+  // Lista partidas já criadas do sorteio (seu backend: GET /sorteios/{id}/partidas)
+  static Future<List<Partida>> getPartidasDoSorteio(int sorteioId) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/$sorteioId/partidas');
+    final resp = await http.get(uri, headers: await _authHeaders());
+    if (resp.statusCode == 200) {
+      return Partida.listFromRaw(resp.body);
+    }
+    throw Exception('Erro ao carregar partidas: ${resp.body}');
+  }
+
+  // Cria partida
+  static Future<Partida> criarPartida({
+    required int sorteioId,
+    required int timeAId,
+    required int timeBId,
+    int tempoSegundos = 420, // 7 min
+  }) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/$sorteioId/partidas');
+    final resp = await http.post(
+      uri,
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ${await getToken()}',
+      },
+      body: jsonEncode({
+        'time_a_id': timeAId,
+        'time_b_id': timeBId,
+        'tempo_segundos': tempoSegundos,
+      }),
+    );
+    if (resp.statusCode == 201 || resp.statusCode == 200) {
+      return Partida.fromJson(jsonDecode(resp.body));
+    }
+    throw Exception('Erro ao criar partida: ${resp.statusCode} ${resp.body}');
+  }
+
+  // Iniciar partida (opcional se já iniciar no criar)
+  static Future<Partida> iniciarPartida(int partidaId) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/partidas/$partidaId/iniciar');
+    final resp = await http.post(uri, headers: await _authHeaders());
+    if (resp.statusCode == 200) {
+      return Partida.fromJson(jsonDecode(resp.body));
+    }
+    throw Exception('Erro ao iniciar partida: ${resp.body}');
+  }
+
+    // Registrar gol
+    static Future<Map<String, dynamic>> registrarGol({
+    required int partidaId,
+    required int timeId,
+    required int jogadorId,
+    int? assistJogadorId,
+    int? segundoRelativo,
+  }) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/partidas/$partidaId/gols');
+    final body = <String, dynamic>{
+      'time_id': timeId,
+      'jogador_id': jogadorId,
+      if (assistJogadorId != null) 'assist_jogador_id': assistJogadorId,
+      if (segundoRelativo != null) 'segundo_relativo': segundoRelativo,
+    };
+
+    final resp = await http.post(
+      uri,
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ${await getToken()}',
+      },
+      body: jsonEncode(body),
+    );
+
+    if (resp.statusCode == 200 || resp.statusCode == 201) {
+      return jsonDecode(resp.body) as Map<String, dynamic>;
+    }
+
+    throw Exception('Erro ao registrar gol: ${resp.statusCode} ${resp.body}');
+  }
+
+
+  // Encerrar partida (registra vencedor/empate e vitórias individuais)
+  static Future<Partida> encerrarPartida(int partidaId) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/partidas/$partidaId/encerrar');
+    final resp = await http.post(uri, headers: await _authHeaders());
+    if (resp.statusCode == 200) {
+      return Partida.fromJson(jsonDecode(resp.body));
+    }
+    throw Exception('Erro ao encerrar partida: ${resp.body}');
+  }
+
+  // Buscar uma partida específica (com placar e gols)
+  static Future<Map<String, dynamic>> getPartidaDetalhe(int partidaId) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/partidas/$partidaId');
+    final resp = await http.get(uri, headers: await _authHeaders());
+    if (resp.statusCode == 200) {
+      return (jsonDecode(resp.body) as Map).cast<String, dynamic>();
+    }
+    throw Exception('Erro ao buscar partida: ${resp.body}');
+  }
+
 
   static Future<bool> updateMeusDados(Map<String, dynamic> payload) async {
     try {

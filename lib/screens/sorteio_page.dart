@@ -7,6 +7,8 @@ import 'sorteio_detalhe_page.dart';
 import '../models/sorteio_detalhe_model.dart';
 import '../../utils/app_date.dart';
 import 'rascunhos_dia_page.dart';
+import 'registrar_partidas_page.dart';
+
 
 class SorteioPage extends StatefulWidget {
   const SorteioPage({Key? key}) : super(key: key);
@@ -508,24 +510,28 @@ class _SorteioPageState extends State<SorteioPage> {
               ),
             )
           else if (_modo == 'confirmado')
-            Positioned(
-              top: 0,
-              right: 0,
-              child: Container(
-                decoration: const BoxDecoration(
-                  color: Colors.green,
-                  borderRadius: BorderRadius.only(
-                    topRight: Radius.circular(16),
-                    bottomLeft: Radius.circular(8),
-                  ),
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                child: const Text(
-                  'CONFIRMADO',
-                  style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                ),
+             Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton.icon(
+                icon: const Icon(Icons.sports_soccer),
+                label: const Text('Registrar partidas'),
+                onPressed: () async {
+                  // já temos os times no objeto; recarrega detalhe para garantir
+                  final detalhe = await ApiService.getSorteioDetalhe(sorteio.id);
+                  if (!mounted) return;
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => RegistrarPartidasPage(sorteio: detalhe),
+                    ),
+                  );
+                  await _carregarTudo();
+                },
               ),
             ),
+          ),
         ],
       ),
     );
