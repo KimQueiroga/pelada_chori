@@ -27,5 +27,6 @@ jobs:
           BB_PASS: ${{ secrets.BITBUCKET_PASSWORD }}
           BB_REPO: ${{ secrets.BITBUCKET_REPO }}
         run: |
-          git remote add bitbucket https://$BB_USER:$BB_PASS@$BB_REPO
+          git remote add bitbucket https://${BB_USER}:${BB_PASS}@${BB_REPO}
           git push bitbucket HEAD:refs/heads/${{ github.ref_name }} --force
+
