@@ -15,6 +15,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set Git identity
         run: |
@@ -28,5 +30,4 @@ jobs:
           BB_REPO: ${{ secrets.BITBUCKET_REPO }}
         run: |
           git remote add bitbucket https://${BB_USER}:${BB_PASS}@${BB_REPO}
-          git push bitbucket HEAD:refs/heads/${{ github.ref_name }} --force
-
+          git push bitbucket refs/heads/${{ github.ref_name }}:refs/heads/${{ github.ref_name }} --force
