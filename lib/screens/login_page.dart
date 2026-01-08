@@ -6,6 +6,7 @@ import '../config/api_config.dart';
 import '../theme/colors.dart';
 import 'home_page.dart';
 import 'package:pelada_chori/screens/forgot_password_page.dart';
+import 'package:pelada_chori/widgets/app_version_text.dart';
 
 
 class LoginPage extends StatefulWidget {
@@ -144,6 +145,7 @@ class _LoginPageState extends State<LoginPage> {
                   },
                   child: const Text('Esqueci minha senha'),
                 ),
+                const AppVersionText(),
               ],
             ),
           ),

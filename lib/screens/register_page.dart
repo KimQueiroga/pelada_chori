@@ -6,6 +6,7 @@ import '../theme/colors.dart';
 import 'package:flutter/services.dart';
 import '../screens/home_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:pelada_chori/widgets/app_version_text.dart';
 
 
 
@@ -203,6 +204,7 @@ class _RegisterPageState extends State<RegisterPage> {
                       ),
                       child: const Text('Cadastrar'),
                     ),
+              const AppVersionText(),
             ],
           ),
         ),

@@ -5,6 +5,7 @@ import 'package:pelada_chori/screens/meus_dados_page.dart';
 import 'package:pelada_chori/screens/sorteio_page.dart';
 import 'package:pelada_chori/widgets/home_highlights_carousel.dart';
 import 'package:pelada_chori/services/auth_service.dart'; // <-- novo
+import 'package:pelada_chori/widgets/app_version_text.dart';
 
 
 
@@ -215,6 +216,9 @@ class _HomePageState extends State<HomePage> {
               const SizedBox(height: 8),
               const HomeHighlightsCarousel(),
               const SizedBox(height: 16),
+              const AppVersionText(
+                padding: EdgeInsets.only(bottom: 8),
+              ),
             ],
           ),
         ),

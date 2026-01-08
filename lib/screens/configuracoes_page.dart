@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../main.dart' show themeController; // acessa o controller global
+import 'package:pelada_chori/widgets/app_version_text.dart';
 
 class ConfiguracoesPage extends StatefulWidget {
   const ConfiguracoesPage({super.key});
@@ -25,6 +26,9 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
               setState(() {});
             },
             secondary: const Icon(Icons.dark_mode),
+          ),
+          const AppVersionText(
+            padding: EdgeInsets.symmetric(vertical: 24),
           ),
           // Opcional: 3 escolhas (Sistema, Claro, Escuro)
           // ListTile(...)
