@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../config/api_config.dart';
 import '../theme/colors.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../services/auth_service.dart';
 import 'package:pelada_chori/shared/widgets/avatar_inicial.dart';
 
 class VotacaoPage extends StatefulWidget {
@@ -54,17 +54,15 @@ class _VotacaoPageState extends State<VotacaoPage> {
   }
 
   Future<void> carregarJogadoresParaVotar() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('jwt_token') ?? '';
-
-    final response = await http.get(
-      Uri.parse('${ApiConfig.baseUrl}/jogadores'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-    );
+    final response = await AuthService.sendWithRefresh((token) {
+      return http.get(
+        Uri.parse('${ApiConfig.baseUrl}/jogadores'),
+        headers: {
+          'Accept': 'application/json',
+          if (token.isNotEmpty) 'Authorization': 'Bearer $token',
+        },
+      );
+    });
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
@@ -81,26 +79,26 @@ class _VotacaoPageState extends State<VotacaoPage> {
   Future<void> enviarVoto() async {
     setState(() => enviando = true);
 
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('jwt_token') ?? '';
     final jogador = jogadoresParaVotar[indiceAtual];
 
     final displayName = ((jogador['apelido'] ?? '') as String).trim().isNotEmpty
         ? (jogador['apelido'] as String).trim()
         : ((jogador['nome'] ?? '') as String).trim();
 
-    final response = await http.post(
-      Uri.parse('${ApiConfig.baseUrl}/votos'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: jsonEncode({
-        'jogador_destino_id': jogador['id'],
-        'notas': notas,
-      }),
-    );
+    final response = await AuthService.sendWithRefresh((token) {
+      return http.post(
+        Uri.parse('${ApiConfig.baseUrl}/votos'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          if (token.isNotEmpty) 'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'jogador_destino_id': jogador['id'],
+          'notas': notas,
+        }),
+      );
+    });
 
     if (response.statusCode == 201) {
       setState(() {

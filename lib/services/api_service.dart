@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'auth_service.dart';
 import '../models/sorteio_simplificado_model.dart';
 import '../models/sorteio_detalhe_model.dart';
 import '../models/partida_model.dart';
@@ -26,16 +26,54 @@ class EmpateVotacaoException implements Exception {
 }
 
 class ApiService {
+  static Map<String, String> _mergeHeaders(
+    Map<String, String>? headers,
+    String token,
+  ) {
+    final merged = <String, String>{};
+    if (headers != null) merged.addAll(headers);
+    merged.putIfAbsent('Accept', () => 'application/json');
+    if (token.isNotEmpty) {
+      merged['Authorization'] = 'Bearer $token';
+    } else {
+      merged.remove('Authorization');
+    }
+    return merged;
+  }
+
+  static Future<http.Response> _getWithAuth(
+    Uri uri, {
+    Map<String, String>? headers,
+  }) {
+    return AuthService.sendWithRefresh(
+      (token) => http.get(uri, headers: _mergeHeaders(headers, token)),
+    );
+  }
+
+  static Future<http.Response> _postWithAuth(
+    Uri uri, {
+    Map<String, String>? headers,
+    Object? body,
+  }) {
+    return AuthService.sendWithRefresh(
+      (token) => http.post(uri, headers: _mergeHeaders(headers, token), body: body),
+    );
+  }
+
+  static Future<http.Response> _putWithAuth(
+    Uri uri, {
+    Map<String, String>? headers,
+    Object? body,
+  }) {
+    return AuthService.sendWithRefresh(
+      (token) => http.put(uri, headers: _mergeHeaders(headers, token), body: body),
+    );
+  }
+
   // Buscar os dados do jogador autenticado
   static Future<Map<String, dynamic>> getMeusDados() async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/meus-dados');
-    final response = await http.get(
-      uri,
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': 'Bearer ${await getToken()}',
-      },
-    );
+    final response = await _getWithAuth(uri);
     if (response.statusCode == 200) {
       return json.decode(response.body);
     } else {
@@ -46,13 +84,7 @@ class ApiService {
   // Buscar todos os jogadores cadastrados (sem filtro de votação)
   static Future<List<Map<String, dynamic>>> getJogadoresTodos() async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/jogadores/todos');
-    final response = await http.get(
-      uri,
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': 'Bearer ${await getToken()}',
-      },
-    );
+    final response = await _getWithAuth(uri);
     if (response.statusCode == 200) {
       final List dados = json.decode(response.body);
       return dados.cast<Map<String, dynamic>>();
@@ -64,13 +96,7 @@ class ApiService {
   // --- ANTIGOS (ainda usados em alguns fluxos) ---
   static Future<List<SorteioSimplificadoModel>> getSorteiosAtivos() async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/ativos');
-    final response = await http.get(
-      uri,
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': 'Bearer ${await getToken()}',
-      },
-    );
+    final response = await _getWithAuth(uri);
 
     if (response.statusCode == 200) {
       final List<dynamic> data = jsonDecode(response.body);
@@ -81,12 +107,8 @@ class ApiService {
   }
 
   static Future<SorteioDetalhe> getSorteioDetalhe(int id) async {
-    final response = await http.get(
+    final response = await _getWithAuth(
       Uri.parse('${ApiConfig.baseUrl}/sorteios/$id'),
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': 'Bearer ${await getToken()}',
-      },
     );
 
     if (response.statusCode == 200) {
@@ -111,7 +133,7 @@ class ApiService {
     final d = data ?? DateTime.now();
     final uri = Uri.parse(
         '${ApiConfig.baseUrl}/sorteios/exibir-do-dia?data=${_ymd(d)}');
-    final resp = await http.get(uri, headers: await _authHeaders());
+    final resp = await _getWithAuth(uri);
 
     if (resp.statusCode != 200) {
       throw Exception('Erro ao buscar sorteios do dia: ${resp.body}');
@@ -139,13 +161,9 @@ class ApiService {
   /// Publica a dupla mais recente do dia para votação
   static Future<void> publicarDupla(DateTime data) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/publicar');
-    final response = await http.post(
+    final response = await _postWithAuth(
       uri,
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ${await getToken()}',
-      },
+      headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'data': _ymd(data)}),
     );
     if (response.statusCode != 200) {
@@ -156,7 +174,7 @@ class ApiService {
   /// Retorna a dupla atualmente em votação (com votos_count)
   static Future<SorteioDetalhe?> getVotacaoAtiva() async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/votacao-ativa');
-    final resp = await http.get(uri, headers: await _authHeaders());
+    final resp = await _getWithAuth(uri);
 
     if (resp.statusCode == 200) {
       final raw = jsonDecode(resp.body);
@@ -186,13 +204,9 @@ class ApiService {
     final body = <String, dynamic>{'data': _ymd(data)};
     if (vencedorId != null) body['vencedor_id'] = vencedorId;
 
-    final response = await http.post(
+    final response = await _postWithAuth(
       uri,
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ${await getToken()}',
-      },
+      headers: {'Content-Type': 'application/json'},
       body: jsonEncode(body),
     );
 
@@ -218,13 +232,9 @@ class ApiService {
     required int jogadorId,
   }) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/$sorteioId/votos');
-    final response = await http.post(
+    final response = await _postWithAuth(
       uri,
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ${await getToken()}',
-      },
+      headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'jogador_id': jogadorId}),
     );
 
@@ -245,7 +255,7 @@ class ApiService {
   /// Resumo de votos dos sorteios em votação hoje. Retorna {sorteio_id: total_votos}.
   static Future<Map<int, int>> getResumoVotosHoje() async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/votacao-ativa/resumo');
-    final resp = await http.get(uri, headers: await _authHeaders());
+    final resp = await _getWithAuth(uri);
 
     if (resp.statusCode == 200) {
       final List list = jsonDecode(resp.body) as List;
@@ -264,7 +274,7 @@ class ApiService {
   /// Retorna { total: int, votos: [ {jogador_nome, jogador_foto, user_name, created_at}, ... ] }
   static Future<Map<String, dynamic>> getVotosDetalheSorteio(int sorteioId) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/$sorteioId/votos?detalhe=1');
-    final resp = await http.get(uri, headers: await _authHeaders());
+    final resp = await _getWithAuth(uri);
 
     if (resp.statusCode == 200) {
       final body = jsonDecode(resp.body) as Map<String, dynamic>;
@@ -280,19 +290,13 @@ class ApiService {
 
   // Recuperar o token JWT armazenado
   static Future<String> getToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('jwt_token') ?? '';
+    return (await AuthService.getToken()) ?? '';
   }
-
-  static Future<Map<String, String>> _authHeaders() async => {
-        'Accept': 'application/json',
-        'Authorization': 'Bearer ${await getToken()}',
-      };
 
   // Rascunhos do dia (lista)
   static Future<List<SorteioDetalhe>> getRascunhosDoDia() async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/rascunhos-dia');
-    final resp = await http.get(uri, headers: await _authHeaders());
+    final resp = await _getWithAuth(uri);
 
     if (resp.statusCode == 200 || resp.statusCode == 200) { // proteção
       final raw = jsonDecode(resp.body);
@@ -326,13 +330,9 @@ class ApiService {
       'estrategia': estrategia,
     };
 
-    final res = await http.post(
+    final res = await _postWithAuth(
       uri,
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ${await getToken()}',
-      },
+      headers: {'Content-Type': 'application/json'},
       body: jsonEncode(body),
     );
 
@@ -377,13 +377,9 @@ class ApiService {
         'jogadores_ids': jogadoresIds,
     };
 
-    final resp = await http.post(
+    final resp = await _postWithAuth(
       url,
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ${await getToken()}',
-      },
+      headers: {'Content-Type': 'application/json'},
       body: jsonEncode(body),
     );
 
@@ -410,13 +406,9 @@ class ApiService {
     required int sorteioId2,
   }) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/publicar');
-    final resp = await http.post(
+    final resp = await _postWithAuth(
       uri,
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ${await getToken()}',
-      },
+      headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'sorteio_id_1': sorteioId1,
         'sorteio_id_2': sorteioId2,
@@ -433,7 +425,7 @@ class ApiService {
   // Lista times de um sorteio (com jogadores) para montar confrontos
   static Future<List<Map<String, dynamic>>> getTimesDoSorteio(int sorteioId) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/$sorteioId/times');
-    final resp = await http.get(uri, headers: await _authHeaders());
+    final resp = await _getWithAuth(uri);
     if (resp.statusCode == 200) {
       final list = (jsonDecode(resp.body) as List).cast<Map<String, dynamic>>();
       return list;
@@ -444,7 +436,7 @@ class ApiService {
   // Lista partidas já criadas do sorteio (seu backend: GET /sorteios/{id}/partidas)
   static Future<List<Partida>> getPartidasDoSorteio(int sorteioId) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/$sorteioId/partidas');
-    final resp = await http.get(uri, headers: await _authHeaders());
+    final resp = await _getWithAuth(uri);
     if (resp.statusCode == 200) {
       return Partida.listFromRaw(resp.body);
     }
@@ -459,13 +451,9 @@ class ApiService {
     int tempoSegundos = 420, // 7 min
   }) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/$sorteioId/partidas');
-    final resp = await http.post(
+    final resp = await _postWithAuth(
       uri,
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ${await getToken()}',
-      },
+      headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'time_a_id': timeAId,
         'time_b_id': timeBId,
@@ -481,7 +469,7 @@ class ApiService {
   // Iniciar partida (opcional se já iniciar no criar)
   static Future<Partida> iniciarPartida(int partidaId) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/partidas/$partidaId/iniciar');
-    final resp = await http.post(uri, headers: await _authHeaders());
+    final resp = await _postWithAuth(uri);
     if (resp.statusCode == 200) {
       return Partida.fromJson(jsonDecode(resp.body));
     }
@@ -504,13 +492,9 @@ class ApiService {
       if (segundoRelativo != null) 'segundo_relativo': segundoRelativo,
     };
 
-    final resp = await http.post(
+    final resp = await _postWithAuth(
       uri,
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ${await getToken()}',
-      },
+      headers: {'Content-Type': 'application/json'},
       body: jsonEncode(body),
     );
 
@@ -525,7 +509,7 @@ class ApiService {
   // Encerrar partida (registra vencedor/empate e vitórias individuais)
   static Future<Partida> encerrarPartida(int partidaId) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/partidas/$partidaId/encerrar');
-    final resp = await http.post(uri, headers: await _authHeaders());
+    final resp = await _postWithAuth(uri);
     if (resp.statusCode == 200) {
       return Partida.fromJson(jsonDecode(resp.body));
     }
@@ -535,7 +519,7 @@ class ApiService {
   // Buscar uma partida específica (com placar e gols)
   static Future<Map<String, dynamic>> getPartidaDetalhe(int partidaId) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/partidas/$partidaId');
-    final resp = await http.get(uri, headers: await _authHeaders());
+    final resp = await _getWithAuth(uri);
     if (resp.statusCode == 200) {
       return (jsonDecode(resp.body) as Map).cast<String, dynamic>();
     }
@@ -545,16 +529,9 @@ class ApiService {
 
   static Future<bool> updateMeusDados(Map<String, dynamic> payload) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('jwt_token') ?? '';
-
-      final resp = await http.put(
+      final resp = await _putWithAuth(
         Uri.parse('${ApiConfig.baseUrl}/meus-dados'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
+        headers: {'Content-Type': 'application/json'},
         body: jsonEncode(payload),
       );
 

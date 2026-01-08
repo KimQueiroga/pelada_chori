@@ -5,7 +5,7 @@ import '../config/api_config.dart';
 import '../theme/colors.dart';
 import 'package:flutter/services.dart';
 import '../screens/home_page.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../services/auth_service.dart';
 import 'package:pelada_chori/widgets/app_version_text.dart';
 
 
@@ -58,8 +58,7 @@ class _RegisterPageState extends State<RegisterPage> {
           final data = jsonDecode(loginResponse.body);
           final token = data['token'];
 
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('jwt_token', token);
+          await AuthService.saveToken(token as String);
 
           // ✅ Cadastra o jogador
           final jogadorResponse = await http.post(

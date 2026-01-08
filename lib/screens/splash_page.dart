@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../services/auth_service.dart';
 
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
@@ -17,10 +17,9 @@ class _SplashPageState extends State<SplashPage> {
   }
 
   Future<void> _tryAutoLogin() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('jwt_token');
+    final token = await AuthService.getValidToken();
 
-    if (token != null && !_isExpired(token)) {
+    if (token != null && token.isNotEmpty) {
       // ok: vai direto pra Home
       if (!mounted) return;
       Navigator.of(context).pushReplacementNamed('/home');

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../config/api_config.dart';
+import '../services/auth_service.dart';
 import '../theme/colors.dart';
 import 'home_page.dart';
 import 'package:pelada_chori/screens/forgot_password_page.dart';
@@ -64,8 +64,7 @@ class _LoginPageState extends State<LoginPage> {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       final token = data['token']; // backend retorna "token"
 
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('jwt_token', token as String);
+      await AuthService.saveToken(token as String);
 
       if (!mounted) return;
       Navigator.pushReplacement(
