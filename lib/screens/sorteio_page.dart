@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../../services/api_service.dart';
-import '../models/sorteio_simplificado_model.dart';
+import '../models/sorteio_simplificado_model.dart'; // ainda usado no detalhe de navegação antiga
 import 'selecionar_jogadores_page.dart';
 import 'sorteio_detalhe_page.dart';
 import '../models/sorteio_detalhe_model.dart';
 import '../../utils/app_date.dart';
 import 'rascunhos_dia_page.dart';
+import 'registrar_partidas_page.dart';
 
 class SorteioPage extends StatefulWidget {
   const SorteioPage({Key? key}) : super(key: key);
@@ -16,15 +17,16 @@ class SorteioPage extends StatefulWidget {
 }
 
 class _SorteioPageState extends State<SorteioPage> {
-  List<SorteioSimplificadoModel> _sorteios = [];
-  bool _loading = true;
+  // Agora trabalharemos diretamente com os DETALHES (vem com times/jogadores)
+  List<SorteioDetalhe> _sorteios = [];
+  Map<int, int> _votosHoje = {}; // id => votos_count (vem do endpoint)
+  Map<int, List<Map<String, dynamic>>> _votantesPorSorteio = {};
 
-  // rascunhos hoje?
+  String _modo = 'vazio'; // 'votacao' | 'confirmado' | 'vazio'
   bool _temRascunhosHoje = false;
 
-  // votos (id => total) e votantes (id => lista)
-  Map<int, int> _votosHoje = {};
-  Map<int, List<Map<String, dynamic>>> _votantesPorSorteio = {};
+  bool _loading = true;
+  bool _encerrando = false;
 
   int get _totalVotosHoje =>
       _votosHoje.values.fold<int>(0, (prev, e) => prev + e);
@@ -38,34 +40,25 @@ class _SorteioPageState extends State<SorteioPage> {
   Future<void> _carregarTudo() async {
     setState(() => _loading = true);
     try {
-      await _carregarSorteios(); // precisa ser antes para termos os IDs
-      await Future.wait([
-        _carregarResumoVotos(),
-        _carregarDetalhesDeCadaSorteio(), // <- detalhe=1 por sorteio
-      ]);
+      await _carregarDoDia(); // carrega sorteios (votação ou confirmados) + votos_count
+      await _carregarFacepile(); // opcional: busca lista de votantes para o facepile
       await _verificarRascunhosHoje();
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  Future<void> _carregarSorteios() async {
-    final sorteios = await ApiService.getSorteiosAtivos();
+  Future<void> _carregarDoDia() async {
+    final res = await ApiService.getExibirDoDia();
     if (!mounted) return;
     setState(() {
-      _sorteios = sorteios;
+      _modo = res.modo;
+      _sorteios = res.sorteios;
+      _votosHoje = res.votosPorId;
     });
   }
 
-  Future<void> _carregarResumoVotos() async {
-    try {
-      final resumo = await ApiService.getResumoVotosHoje();
-      if (!mounted) return;
-      setState(() => _votosHoje = resumo);
-    } catch (_) {}
-  }
-
-  Future<void> _carregarDetalhesDeCadaSorteio() async {
+  Future<void> _carregarFacepile() async {
     if (_sorteios.isEmpty) return;
     try {
       final results = await Future.wait(
@@ -78,7 +71,7 @@ class _SorteioPageState extends State<SorteioPage> {
         final s = _sorteios[i];
         final r = results[i];
         byId[s.id] = (r['votos'] as List).cast<Map<String, dynamic>>();
-        totals[s.id] = r['total'] as int;
+        totals[s.id] = r['total'] as int; // mantém total coerente
       }
 
       if (!mounted) return;
@@ -87,7 +80,7 @@ class _SorteioPageState extends State<SorteioPage> {
         _votosHoje = totals;
       });
     } catch (_) {
-      // silencioso por enquanto (UI ainda funciona com o resumo)
+      // silencioso
     }
   }
 
@@ -163,20 +156,49 @@ class _SorteioPageState extends State<SorteioPage> {
     return n.characters.first.toUpperCase();
   }
 
+  String _statusLabel(String? s) {
+    switch ((s ?? '').toLowerCase()) {
+      case 'em_votacao':
+        return 'ABERTO';
+      case 'confirmado':
+        return 'CONFIRMADO';
+      case 'rascunho':
+        return 'RASCUNHO';
+      case 'ativo':
+        return 'ATIVO';
+      default:
+        return (s ?? '').isEmpty ? '—' : s!;
+    }
+  }
+
+  Color _statusColor(BuildContext ctx, String? s) {
+    final sch = Theme.of(ctx).colorScheme;
+    switch ((s ?? '').toLowerCase()) {
+      case 'em_votacao':
+        return sch.error;
+      case 'confirmado':
+        return sch.primary;
+      case 'rascunho':
+        return sch.surfaceVariant;
+      case 'ativo':
+        return sch.tertiary;
+      default:
+        return sch.outlineVariant;
+    }
+  }
+
   Widget _votersFacepile(int sorteioId) {
     final lista = _votantesPorSorteio[sorteioId] ?? const [];
     if (lista.isEmpty) return const SizedBox.shrink();
 
     final top3 = lista.take(3).toList();
-
-    // Cálculo de largura: 1º avatar = 28px, cada próximo desloca 18px
-    final double base = 28.0;
-    final double overlap = 18.0;
+    const double base = 28.0;
+    const double overlap = 18.0;
     final double width = base + (top3.length - 1) * overlap;
 
     return SizedBox(
       height: 28,
-      width: width, // <<< IMPORTANTE: largura finita para a Stack
+      width: width,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
@@ -193,10 +215,8 @@ class _SorteioPageState extends State<SorteioPage> {
                 child: (() {
                   final foto = (top3[i]['jogador_foto'] as String?)?.trim();
                   if (foto != null && foto.isNotEmpty) return null;
-                  final nome = (top3[i]['jogador_nome'] ??
-                          top3[i]['user_name'] ??
-                          '')
-                      .toString();
+                  final nome =
+                      (top3[i]['jogador_nome'] ?? top3[i]['user_name'] ?? '').toString();
                   return Text(
                     _initialFromName(nome),
                     style: const TextStyle(
@@ -212,10 +232,11 @@ class _SorteioPageState extends State<SorteioPage> {
       ),
     );
   }
+
   Widget _pollBar({
     required int votosDoSorteio,
     required int votosTotais,
-    required VoidCallback onMostrarVotos, // <<< novo
+    required VoidCallback onMostrarVotos,
   }) {
     final percent = (votosTotais > 0) ? (votosDoSorteio / votosTotais) : 0.0;
     return Column(
@@ -254,7 +275,6 @@ class _SorteioPageState extends State<SorteioPage> {
   }
 
   Future<void> _mostrarVotantesDeSorteio(int sorteioId) async {
-    // usa os dados já carregados (_votantesPorSorteio) por enquanto
     final s = _sorteios.firstWhere((e) => e.id == sorteioId);
     final lista = _votantesPorSorteio[sorteioId] ?? const [];
 
@@ -286,7 +306,8 @@ class _SorteioPageState extends State<SorteioPage> {
                     separatorBuilder: (_, __) => const Divider(height: 1),
                     itemBuilder: (context, i) {
                       final v = lista[i];
-                      final nome = (v['jogador_nome'] ?? v['user_name'] ?? 'Jogador').toString();
+                      final nome =
+                          (v['jogador_nome'] ?? v['user_name'] ?? 'Jogador').toString();
                       final foto = (v['jogador_foto'] as String?)?.trim();
                       return ListTile(
                         leading: CircleAvatar(
@@ -308,106 +329,229 @@ class _SorteioPageState extends State<SorteioPage> {
     );
   }
 
+  // ---------- Encerrar votação (com empate) ----------
+  Future<void> _confirmarEncerramento() async {
+    if (_sorteios.length != 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('É preciso ter exatamente 2 sorteios em votação.')),
+      );
+      return;
+    }
+
+    final a = _sorteios[0];
+    final b = _sorteios[1];
+    final votosA = _votosHoje[a.id] ?? 0;
+    final votosB = _votosHoje[b.id] ?? 0;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Encerrar votação do dia?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Sorteio nº ${a.numero}: $votosA voto(s)'),
+            Text('Sorteio nº ${b.numero}: $votosB voto(s)'),
+            const SizedBox(height: 12),
+            const Text('Isso confirmará o vencedor e descartará o perdedor.'),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Encerrar')),
+        ],
+      ),
+    );
+
+    if (ok != true) return;
+
+    await _encerrarVotacao();
+  }
+
+  Future<void> _encerrarVotacao({int? vencedorId}) async {
+    setState(() => _encerrando = true);
+    try {
+      await ApiService.fecharVotacaoDoDia(
+        data: DateTime.now(),
+        vencedorId: vencedorId,
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Votação encerrada com sucesso!')),
+      );
+      await _carregarTudo();
+    } on EmpateVotacaoException catch (e) {
+      if (!mounted) return;
+      final escolhido = await _dialogEscolherVencedorEmCasoDeEmpate(e.empate);
+      if (escolhido != null) {
+        await _encerrarVotacao(vencedorId: escolhido);
+      }
+    } catch (err) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Falha ao encerrar: $err')),
+      );
+    } finally {
+      if (mounted) setState(() => _encerrando = false);
+    }
+  }
+
+  Future<int?> _dialogEscolherVencedorEmCasoDeEmpate(
+      List<Map<String, dynamic>> empate) async {
+    final m = {for (final s in _sorteios) s.id: s};
+    int? selecionado = (empate.isNotEmpty ? empate.first['id'] as int? : null);
+
+    return showDialog<int>(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (context, setSt) => AlertDialog(
+          title: const Text('Empate — escolha o vencedor'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: empate.map((e) {
+              final id = e['id'] as int;
+              final votos = e['votos'] as int? ?? 0;
+              final s = m[id];
+              final rotulo = s != null ? 'Sorteio nº ${s.numero}' : 'Sorteio $id';
+              return RadioListTile<int>(
+                value: id,
+                groupValue: selecionado,
+                onChanged: (v) => setSt(() => selecionado = v),
+                title: Text(rotulo),
+                subtitle: Text('$votos voto(s)'),
+              );
+            }).toList(),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+            FilledButton(
+              onPressed:
+                  selecionado == null ? null : () => Navigator.pop<int>(context, selecionado),
+              child: const Text('Confirmar vencedor'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ---------- item ----------
 
-  Widget _buildSorteioItem(SorteioSimplificadoModel sorteio) {
+  Widget _buildSorteioItem(SorteioDetalhe sorteio) {
     final dataFormatada = AppDate.brFromApi(sorteio.data);
     final votosEste = _votosHoje[sorteio.id] ?? 0;
 
-    return GestureDetector(
-      onTap: () async {
-        final detalhe = await ApiService.getSorteioDetalhe(sorteio.id);
+    // 👉 tocar no card SEMPRE abre os detalhes (mesmo confirmados)
+    Future<void> _abrirDetalhe() async {
+      final detalhe = await ApiService.getSorteioDetalhe(sorteio.id);
+      if (!mounted) return;
+
+      final result = await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => SorteioDetalhePage(sorteio: detalhe)),
+      );
+
+      if (result == true) {
+        await _carregarTudo();
         if (!mounted) return;
-
-        final result = await Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => SorteioDetalhePage(sorteio: detalhe)),
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Seu voto foi registrado.')),
         );
+      }
+    }
 
-        if (result == true) {
-          await _carregarTudo();
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Seu voto foi registrado.')),
-          );
-        }
-      },
-      child: Stack(
-        children: [
-          Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            elevation: 4,
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: _abrirDetalhe,
+      child: Card(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        elevation: 4,
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // cabeçalho
+              Row(
                 children: [
-                  // cabeçalho
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Sorteio nº ${sorteio.numero}',
-                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      if (votosEste > 0) _votersFacepile(sorteio.id),
-                      const SizedBox(width: 8),
-                      if (votosEste > 0)
-                        Chip(
-                          label: Text('$votosEste'),
-                          visualDensity: VisualDensity.compact,
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text('Data: $dataFormatada'),
-                  if (sorteio.descricao.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        sorteio.descricao,
-                        style: const TextStyle(color: Colors.grey),
-                      ),
+                  Expanded(
+                    child: Text(
+                      'Sorteio nº ${sorteio.numero}',
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
-
-                  // barra estilo "enquete" (usa totais do dia)
-                  if (_votosHoje.isNotEmpty)
-                    _pollBar(
-                      votosDoSorteio: votosEste,
-                      votosTotais: _totalVotosHoje,
-                      onMostrarVotos: () => _mostrarVotantesDeSorteio(sorteio.id), // <<< aqui
-                    ),
-
-                  const Align(
-                    alignment: Alignment.bottomRight,
-                    child: Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
                   ),
+                  if ((sorteio.status ?? '').isNotEmpty)
+                    Chip(
+                      label: Text(_statusLabel(sorteio.status)),
+                      labelStyle: const TextStyle(
+                          color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
+                      backgroundColor: _statusColor(context, sorteio.status),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  const SizedBox(width: 8),
+                  if (votosEste > 0) _votersFacepile(sorteio.id),
+                  const SizedBox(width: 8),
+                  if (votosEste > 0)
+                    Chip(
+                      label: Text('$votosEste'),
+                      visualDensity: VisualDensity.compact,
+                    ),
                 ],
               ),
-            ),
-          ),
-          // selo "ABERTO"
-          Positioned(
-            top: 0,
-            right: 0,
-            child: Container(
-              decoration: const BoxDecoration(
-                color: Colors.redAccent,
-                borderRadius: BorderRadius.only(
-                  topRight: Radius.circular(16),
-                  bottomLeft: Radius.circular(8),
+              const SizedBox(height: 8),
+              Text('Data: $dataFormatada'),
+              if ((sorteio.descricao ?? '').isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    sorteio.descricao!,
+                    style: const TextStyle(color: Colors.grey),
+                  ),
                 ),
+
+              // barra estilo "enquete"
+              _pollBar(
+                votosDoSorteio: votosEste,
+                votosTotais: _totalVotosHoje == 0 ? votosEste : _totalVotosHoje,
+                onMostrarVotos: () => _mostrarVotantesDeSorteio(sorteio.id),
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              child: const Text(
-                'ABERTO',
-                style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+
+              // rodapé de ações do card (apenas quando confirmado)
+              if (_modo == 'confirmado') ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const Spacer(),
+                    FilledButton.icon(
+                      icon: const Icon(Icons.sports_soccer),
+                      label: const Text('Registrar partidas'),
+                      onPressed: () async {
+                        final detalhe = await ApiService.getSorteioDetalhe(sorteio.id);
+                        if (!mounted) return;
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => RegistrarPartidasPage(sorteio: detalhe),
+                          ),
+                        );
+                        await _carregarTudo();
+                      },
+                    ),
+                  ],
+                ),
+              ],
+
+              const SizedBox(height: 4),
+              const Align(
+                alignment: Alignment.bottomRight,
+                child: Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
               ),
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -419,7 +563,7 @@ class _SorteioPageState extends State<SorteioPage> {
     final bodyList = _loading
         ? const Center(child: CircularProgressIndicator())
         : _sorteios.isEmpty
-            ? const Center(child: Text('Nenhum sorteio ativo encontrado.'))
+            ? const Center(child: Text('Nenhum sorteio disponível hoje.'))
             : ListView.builder(
                 padding: const EdgeInsets.only(bottom: 96),
                 itemCount: _sorteios.length,
@@ -428,19 +572,39 @@ class _SorteioPageState extends State<SorteioPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Sorteios Ativos'),
+        title: Text(_modo == 'votacao'
+            ? 'Sorteios em votação'
+            : _modo == 'confirmado'
+                ? 'Sorteios confirmados'
+                : 'Sorteios do dia'),
         actions: [
           IconButton(
             tooltip: 'Rascunhos de hoje',
             icon: const Icon(Icons.description_outlined),
             onPressed: _abrirRascunhos,
           ),
+          if (_modo == 'votacao' && _sorteios.length == 2)
+            IconButton(
+              tooltip: 'Encerrar votação do dia',
+              icon: _encerrando
+                  ? const Padding(
+                      padding: EdgeInsets.all(10),
+                      child: SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  : const Icon(Icons.how_to_vote_rounded),
+              onPressed: _encerrando ? null : _confirmarEncerramento,
+            ),
         ],
       ),
       body: RefreshIndicator(
         onRefresh: _carregarTudo,
         child: Column(
           children: [
+            // banner removido conforme solicitado
             if (_temRascunhosHoje)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),

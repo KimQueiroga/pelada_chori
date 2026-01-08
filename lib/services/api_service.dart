@@ -4,6 +4,7 @@ import '../config/api_config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/sorteio_simplificado_model.dart';
 import '../models/sorteio_detalhe_model.dart';
+import '../models/partida_model.dart';
 import 'package:intl/intl.dart';
 
 /// Exceção específica quando o backend exige médias manuais.
@@ -13,6 +14,15 @@ class NeedMediaException implements Exception {
   NeedMediaException(this.ids, {this.message});
   @override
   String toString() => message ?? 'Jogadores sem média: $ids';
+}
+
+/// Exceção específica para empate ao encerrar votação.
+class EmpateVotacaoException implements Exception {
+  final List<Map<String, dynamic>> empate; // [{id, votos}, {id, votos}]
+  final String message;
+  EmpateVotacaoException(this.empate, {this.message = 'Empate detectado.'});
+  @override
+  String toString() => message;
 }
 
 class ApiService {
@@ -51,6 +61,7 @@ class ApiService {
     }
   }
 
+  // --- ANTIGOS (ainda usados em alguns fluxos) ---
   static Future<List<SorteioSimplificadoModel>> getSorteiosAtivos() async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/ativos');
     final response = await http.get(
@@ -87,6 +98,43 @@ class ApiService {
 
   static String _ymd(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  /// NOVO: endpoint "inteligente" — votacao → retorna votando; senão → confirmados
+  /// Resposta:
+  /// { modo: "votacao"|"confirmado"|"vazio", sorteios: [...], data: "YYYY-MM-DD" }
+  /// Cada item tem "votos_count" e estrutura de SorteioDetalhe (com times/jogadores).
+  static Future<({
+    String modo,
+    List<SorteioDetalhe> sorteios,
+    Map<int, int> votosPorId,
+  })> getExibirDoDia({DateTime? data}) async {
+    final d = data ?? DateTime.now();
+    final uri = Uri.parse(
+        '${ApiConfig.baseUrl}/sorteios/exibir-do-dia?data=${_ymd(d)}');
+    final resp = await http.get(uri, headers: await _authHeaders());
+
+    if (resp.statusCode != 200) {
+      throw Exception('Erro ao buscar sorteios do dia: ${resp.body}');
+    }
+
+    final body = jsonDecode(resp.body) as Map<String, dynamic>;
+    final modo = (body['modo'] as String?) ?? 'vazio';
+    final list = (body['sorteios'] as List? ?? const [])
+        .map((e) => e as Map<String, dynamic>)
+        .toList();
+
+    final sorteios = <SorteioDetalhe>[];
+    final votos = <int, int>{};
+
+    for (final m in list) {
+      final s = SorteioDetalhe.fromJson(m);
+      sorteios.add(s);
+      final vc = (m['votos_count'] is num) ? (m['votos_count'] as num).toInt() : 0;
+      votos[s.id] = vc;
+    }
+
+    return (modo: modo, sorteios: sorteios, votosPorId: votos);
+  }
 
   /// Publica a dupla mais recente do dia para votação
   static Future<void> publicarDupla(DateTime data) async {
@@ -128,9 +176,16 @@ class ApiService {
     throw Exception('Erro ao carregar votação ativa: ${resp.body}');
   }
 
-  /// Encerrar votação do dia (decide vencedor e descarta a outra)
-  static Future<void> fecharVotacao(DateTime data) async {
+  /// Encerrar votação do dia (com suporte a empate via vencedorId)
+  static Future<Map<String, dynamic>> fecharVotacaoDoDia({
+    required DateTime data,
+    int? vencedorId,
+  }) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/fechar-votacao');
+
+    final body = <String, dynamic>{'data': _ymd(data)};
+    if (vencedorId != null) body['vencedor_id'] = vencedorId;
+
     final response = await http.post(
       uri,
       headers: {
@@ -138,11 +193,23 @@ class ApiService {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ${await getToken()}',
       },
-      body: jsonEncode({'data': _ymd(data)}),
+      body: jsonEncode(body),
     );
-    if (response.statusCode != 200) {
-      throw Exception('Erro ao fechar votação: ${response.body}');
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
     }
+
+    if (response.statusCode == 409) {
+      final j = jsonDecode(response.body);
+      final lista = (j['empate'] as List?)
+              ?.map<Map<String, dynamic>>((e) => (e as Map).cast<String, dynamic>())
+              .toList() ??
+          const [];
+      throw EmpateVotacaoException(lista, message: (j['message'] ?? 'Empate') as String);
+    }
+
+    throw Exception('Erro ao fechar votação: ${response.statusCode} ${response.body}');
   }
 
   /// Votar em um sorteio publicado (envia jogador_id como o backend exige).
@@ -175,8 +242,7 @@ class ApiService {
     throw Exception('Erro ao votar: ${response.statusCode} ${response.body}');
   }
 
-  /// >>> Resumo de votos dos sorteios em votação hoje.
-  /// Retorna um mapa {sorteio_id: total_votos}.
+  /// Resumo de votos dos sorteios em votação hoje. Retorna {sorteio_id: total_votos}.
   static Future<Map<int, int>> getResumoVotosHoje() async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/votacao-ativa/resumo');
     final resp = await http.get(uri, headers: await _authHeaders());
@@ -194,7 +260,7 @@ class ApiService {
     throw Exception('Erro ao carregar resumo de votos: ${resp.body}');
   }
 
-  /// >>> NOVO: Detalhes de votos de um sorteio específico (usa ?detalhe=1).
+  /// Detalhes de votos de um sorteio (usa ?detalhe=1).
   /// Retorna { total: int, votos: [ {jogador_nome, jogador_foto, user_name, created_at}, ... ] }
   static Future<Map<String, dynamic>> getVotosDetalheSorteio(int sorteioId) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/$sorteioId/votos?detalhe=1');
@@ -204,7 +270,9 @@ class ApiService {
       final body = jsonDecode(resp.body) as Map<String, dynamic>;
       final total = (body['total_votos'] is num) ? (body['total_votos'] as num).toInt() : 0;
       final List votosRaw = (body['detalhes']?['votos'] as List?) ?? const [];
-      final votos = votosRaw.map<Map<String, dynamic>>((e) => (e as Map).cast<String, dynamic>()).toList();
+      final votos = votosRaw
+          .map<Map<String, dynamic>>((e) => (e as Map).cast<String, dynamic>())
+          .toList();
       return {'total': total, 'votos': votos};
     }
     throw Exception('Erro ao carregar votos do sorteio: ${resp.body}');
@@ -226,7 +294,7 @@ class ApiService {
     final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/rascunhos-dia');
     final resp = await http.get(uri, headers: await _authHeaders());
 
-    if (resp.statusCode == 200) {
+    if (resp.statusCode == 200 || resp.statusCode == 200) { // proteção
       final raw = jsonDecode(resp.body);
       if (raw is List) {
         return raw.map<SorteioDetalhe>((e) => SorteioDetalhe.fromJson(e)).toList();
@@ -326,7 +394,9 @@ class ApiService {
     if (resp.statusCode == 422) {
       final json = jsonDecode(resp.body);
       if (json is Map && json['ids'] is List) {
-        final ids = (json['ids'] as List).map((e) => int.parse(e.toString())).toList();
+        final ids = (json['ids'] as List)
+            .map((e) => int.parse(e.toString()))
+            .toList();
         throw NeedMediaException(ids, message: json['error']?.toString());
       }
       throw Exception(json['error'] ?? 'Erro de validação.');
@@ -357,6 +427,121 @@ class ApiService {
       throw Exception('Erro ao publicar: ${resp.body}');
     }
   }
+
+    // ===== PARTIDAS =====
+
+  // Lista times de um sorteio (com jogadores) para montar confrontos
+  static Future<List<Map<String, dynamic>>> getTimesDoSorteio(int sorteioId) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/$sorteioId/times');
+    final resp = await http.get(uri, headers: await _authHeaders());
+    if (resp.statusCode == 200) {
+      final list = (jsonDecode(resp.body) as List).cast<Map<String, dynamic>>();
+      return list;
+    }
+    throw Exception('Erro ao carregar times do sorteio: ${resp.body}');
+  }
+
+  // Lista partidas já criadas do sorteio (seu backend: GET /sorteios/{id}/partidas)
+  static Future<List<Partida>> getPartidasDoSorteio(int sorteioId) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/$sorteioId/partidas');
+    final resp = await http.get(uri, headers: await _authHeaders());
+    if (resp.statusCode == 200) {
+      return Partida.listFromRaw(resp.body);
+    }
+    throw Exception('Erro ao carregar partidas: ${resp.body}');
+  }
+
+  // Cria partida
+  static Future<Partida> criarPartida({
+    required int sorteioId,
+    required int timeAId,
+    required int timeBId,
+    int tempoSegundos = 420, // 7 min
+  }) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/$sorteioId/partidas');
+    final resp = await http.post(
+      uri,
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ${await getToken()}',
+      },
+      body: jsonEncode({
+        'time_a_id': timeAId,
+        'time_b_id': timeBId,
+        'tempo_segundos': tempoSegundos,
+      }),
+    );
+    if (resp.statusCode == 201 || resp.statusCode == 200) {
+      return Partida.fromJson(jsonDecode(resp.body));
+    }
+    throw Exception('Erro ao criar partida: ${resp.statusCode} ${resp.body}');
+  }
+
+  // Iniciar partida (opcional se já iniciar no criar)
+  static Future<Partida> iniciarPartida(int partidaId) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/partidas/$partidaId/iniciar');
+    final resp = await http.post(uri, headers: await _authHeaders());
+    if (resp.statusCode == 200) {
+      return Partida.fromJson(jsonDecode(resp.body));
+    }
+    throw Exception('Erro ao iniciar partida: ${resp.body}');
+  }
+
+    // Registrar gol
+    static Future<Map<String, dynamic>> registrarGol({
+    required int partidaId,
+    required int timeId,
+    required int jogadorId,
+    int? assistJogadorId,
+    int? segundoRelativo,
+  }) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/partidas/$partidaId/gols');
+    final body = <String, dynamic>{
+      'time_id': timeId,
+      'jogador_id': jogadorId,
+      if (assistJogadorId != null) 'assist_jogador_id': assistJogadorId,
+      if (segundoRelativo != null) 'segundo_relativo': segundoRelativo,
+    };
+
+    final resp = await http.post(
+      uri,
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ${await getToken()}',
+      },
+      body: jsonEncode(body),
+    );
+
+    if (resp.statusCode == 200 || resp.statusCode == 201) {
+      return jsonDecode(resp.body) as Map<String, dynamic>;
+    }
+
+    throw Exception('Erro ao registrar gol: ${resp.statusCode} ${resp.body}');
+  }
+
+
+  // Encerrar partida (registra vencedor/empate e vitórias individuais)
+  static Future<Partida> encerrarPartida(int partidaId) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/partidas/$partidaId/encerrar');
+    final resp = await http.post(uri, headers: await _authHeaders());
+    if (resp.statusCode == 200) {
+      return Partida.fromJson(jsonDecode(resp.body));
+    }
+    throw Exception('Erro ao encerrar partida: ${resp.body}');
+  }
+
+  // Buscar uma partida específica (com placar e gols)
+  static Future<Map<String, dynamic>> getPartidaDetalhe(int partidaId) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/partidas/$partidaId');
+    final resp = await http.get(uri, headers: await _authHeaders());
+    if (resp.statusCode == 200) {
+      return (jsonDecode(resp.body) as Map).cast<String, dynamic>();
+    }
+    throw Exception('Erro ao buscar partida: ${resp.body}');
+  }
+
 
   static Future<bool> updateMeusDados(Map<String, dynamic> payload) async {
     try {

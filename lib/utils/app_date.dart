@@ -26,5 +26,22 @@ class AppDate {
 
   /// Atalho: recebe string da API e devolve pronta no formato dd/MM/yyyy.
   static String brFromApi(String raw) => br(parseApi(raw));
+   
+  /// Ex.: "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"
+  static String weekdayShortPt(DateTime d) {
+    const nomes = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+    // DateTime.weekday: 1 = Mon ... 7 = Sun
+    return nomes[(d.weekday - 1).clamp(0, 6)];
+  }
+
+  /// Ex.: "24 Out" (dia sem zero à esquerda + mês abreviado PT-BR)
+  static String dayMonthShortPt(DateTime d) {
+    const meses = [
+      'Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'
+    ];
+    final mes = meses[(d.month - 1).clamp(0, 11)];
+    return '${d.day} $mes';
+  }
+
 }
 
