@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:pelada_chori/screens/configuracoes_page.dart';
 import 'package:pelada_chori/screens/votacao_page.dart';
 import 'package:pelada_chori/screens/meus_dados_page.dart';
+import 'package:pelada_chori/screens/estatisticas_page.dart';
 import 'package:pelada_chori/screens/sorteio_page.dart';
 import 'package:pelada_chori/widgets/home_highlights_carousel.dart';
 import 'package:pelada_chori/services/auth_service.dart'; // <-- novo
@@ -133,7 +134,10 @@ class _HomePageState extends State<HomePage> {
       {
         'label': 'Estatísticas', 
         'icon': Icons.show_chart, 
-        'onTap': () => _showEmBreve(context),
+        'onTap': () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const EstatisticasPage()),
+        ),
         },
     ];
 

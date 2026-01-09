@@ -200,6 +200,40 @@ class ApiService {
     );
   }
 
+  static Future<List<Map<String, dynamic>>> getEstatisticasAnaliticas({
+    int? ano,
+    int? mes,
+    int? jogadorId,
+    String estatistica = 'vitorias',
+    int limite = 50,
+  }) async {
+    var safeLimite = limite;
+    if (safeLimite < 1) safeLimite = 1;
+    if (safeLimite > 100) safeLimite = 100;
+
+    final params = <String, String>{
+      'estatistica': estatistica,
+      'limite': safeLimite.toString(),
+    };
+    if (ano != null) params['ano'] = ano.toString();
+    if (mes != null) params['mes'] = mes.toString();
+    if (jogadorId != null) params['jogador_id'] = jogadorId.toString();
+
+    final uri = Uri.parse('${ApiConfig.baseUrl}/destaques/analitico')
+        .replace(queryParameters: params);
+    final resp = await _getWithAuth(uri);
+
+    if (resp.statusCode != 200) {
+      throw Exception('Erro ao carregar estatisticas: ${resp.body}');
+    }
+
+    final body = jsonDecode(resp.body) as Map<String, dynamic>;
+    final raw = (body['items'] as List?) ?? const [];
+    return raw
+        .map<Map<String, dynamic>>((e) => (e as Map).cast<String, dynamic>())
+        .toList();
+  }
+
   /// Publica a dupla mais recente do dia para votação
   static Future<void> publicarDupla(DateTime data) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/publicar');

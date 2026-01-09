@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:pelada_chori/screens/estatisticas_page.dart';
 import 'package:pelada_chori/services/api_service.dart';
 
 class StatEntry {
@@ -14,6 +15,18 @@ class HomeHighlightsCarousel extends StatefulWidget {
 
   @override
   State<HomeHighlightsCarousel> createState() => _HomeHighlightsCarouselState();
+}
+
+class _Top5CardData {
+  final String title;
+  final String statKey;
+  final List<StatEntry> items;
+
+  const _Top5CardData({
+    required this.title,
+    required this.statKey,
+    required this.items,
+  });
 }
 
 class _HomeHighlightsCarouselState extends State<HomeHighlightsCarousel> {
@@ -115,10 +128,22 @@ class _HomeHighlightsCarouselState extends State<HomeHighlightsCarousel> {
 
   @override
   Widget build(BuildContext context) {
-    final cards = <_Top5Card>[
-      _Top5Card(title: 'Top 5 Vitorias', items: _vitorias),
-      _Top5Card(title: 'Top 5 Gols', items: _gols),
-      _Top5Card(title: 'Top 5 Assistencias', items: _assist),
+    final cards = <_Top5CardData>[
+      _Top5CardData(
+        title: 'Top 5 Vitorias',
+        statKey: 'vitorias',
+        items: _vitorias,
+      ),
+      _Top5CardData(
+        title: 'Top 5 Gols',
+        statKey: 'gols',
+        items: _gols,
+      ),
+      _Top5CardData(
+        title: 'Top 5 Assistencias',
+        statKey: 'assistencias',
+        items: _assist,
+      ),
     ];
 
     return LayoutBuilder(
@@ -177,6 +202,15 @@ class _HomeHighlightsCarouselState extends State<HomeHighlightsCarousel> {
                     title: cards[i].title,
                     items: cards[i].items,
                     itemExtentOverride: itemExtent,
+                    onDetails: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => EstatisticasPage(
+                            initialStat: cards[i].statKey,
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
               ),
@@ -197,11 +231,13 @@ class _Top5Card extends StatelessWidget {
     required this.title,
     required this.items,
     this.itemExtentOverride,
+    this.onDetails,
   });
 
   final String title;
   final List<StatEntry> items;
   final double? itemExtentOverride;
+  final VoidCallback? onDetails;
 
   @override
   Widget build(BuildContext context) {
@@ -245,7 +281,7 @@ class _Top5Card extends StatelessWidget {
                 ),
                 const Spacer(),
                 TextButton(
-                  onPressed: () {},
+                  onPressed: onDetails,
                   style: TextButton.styleFrom(
                     padding: EdgeInsets.zero,
                     minimumSize: const Size(0, 0),
