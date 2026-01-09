@@ -560,10 +560,66 @@ class _SorteioPageState extends State<SorteioPage> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final bodyList = _loading
         ? const Center(child: CircularProgressIndicator())
         : _sorteios.isEmpty
-            ? const Center(child: Text('Nenhum sorteio disponível hoje.'))
+            ? ListView(
+                padding: const EdgeInsets.fromLTRB(16, 40, 16, 16),
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: cs.surface,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: cs.primary.withOpacity(0.15)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 12,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 64,
+                          height: 64,
+                          decoration: BoxDecoration(
+                            color: cs.primary.withOpacity(0.12),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(Icons.event_busy, color: cs.primary, size: 32),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Nenhum sorteio disponivel hoje',
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w800),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Crie um novo sorteio para iniciar a votacao ou confirmar equipes.',
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: cs.onSurface.withOpacity(0.6),
+                              ),
+                        ),
+                        const SizedBox(height: 16),
+                        OutlinedButton.icon(
+                          onPressed: _abrirMenuAcoes,
+                          icon: const Icon(Icons.add),
+                          label: const Text('Novo sorteio'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              )
             : ListView.builder(
                 padding: const EdgeInsets.only(bottom: 96),
                 itemCount: _sorteios.length,
@@ -633,3 +689,4 @@ class _SorteioPageState extends State<SorteioPage> {
     );
   }
 }
+
