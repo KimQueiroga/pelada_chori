@@ -30,8 +30,11 @@ class _PartidaRodandoPageState extends State<PartidaRodandoPage> {
   // times / jogadores
   List<Map<String, dynamic>> _playersA = const [];
   List<Map<String, dynamic>> _playersB = const [];
+  List<Map<String, dynamic>> _playersOrigA = const [];
+  List<Map<String, dynamic>> _playersOrigB = const [];
   List<Map<String, dynamic>> _todosJogadores = const [];
   List<Map<String, dynamic>> _substituicoes = const [];
+  List<Map<String, dynamic>> _substituicoesTodas = const [];
 
   // gols e contagens por jogador
   List<Map<String, dynamic>> _gols = const [];
@@ -108,6 +111,13 @@ class _PartidaRodandoPageState extends State<PartidaRodandoPage> {
             .map<Map<String, dynamic>>((e) => (e as Map).cast<String, dynamic>())
             .toList();
 
+    Map<String, dynamic> byId(int id) {
+      return times.firstWhere(
+        (x) => x['id'] == id,
+        orElse: () => <String, dynamic>{},
+      );
+    }
+
     List<Map<String, dynamic>> flattenJogadores(List<Map<String, dynamic>> times) {
       final all = <Map<String, dynamic>>[];
       for (final t in times) {
@@ -127,6 +137,8 @@ class _PartidaRodandoPageState extends State<PartidaRodandoPage> {
     if (!mounted) return;
     setState(() {
       _todosJogadores = flattenJogadores(times);
+      _playersOrigA = toPlayers(byId(_p.timeAId));
+      _playersOrigB = toPlayers(byId(_p.timeBId));
       _aplicarElenco(elenco);
     });
   }
@@ -155,10 +167,14 @@ class _PartidaRodandoPageState extends State<PartidaRodandoPage> {
     final timeA = (elenco['time_a'] as Map?)?.cast<String, dynamic>() ?? const {};
     final timeB = (elenco['time_b'] as Map?)?.cast<String, dynamic>() ?? const {};
     final subs = (elenco['substituicoes'] as List?) ?? const [];
+    final subsTodas = (elenco['substituicoes_todas'] as List?) ?? subs;
 
     _playersA = toPlayers(timeA);
     _playersB = toPlayers(timeB);
     _substituicoes = subs
+        .map<Map<String, dynamic>>((e) => (e as Map).cast<String, dynamic>())
+        .toList();
+    _substituicoesTodas = subsTodas
         .map<Map<String, dynamic>>((e) => (e as Map).cast<String, dynamic>())
         .toList();
   }
@@ -171,6 +187,20 @@ class _PartidaRodandoPageState extends State<PartidaRodandoPage> {
   String _nomeJogadorPj(Map<String, dynamic> pj) {
     final j = (pj['jogador'] as Map?)?.cast<String, dynamic>();
     return _nomeJogador(j);
+  }
+
+  Map<String, dynamic> _wrapJogador(Map<String, dynamic>? j) {
+    return {
+      'jogador_id': (j?['id'] as int?) ?? 0,
+      'jogador': j ?? <String, dynamic>{},
+    };
+  }
+
+  List<Map<String, dynamic>> _substituicoesPorTime(
+    List<Map<String, dynamic>> subs,
+    int timeId,
+  ) {
+    return subs.where((s) => s['time_id'] == timeId).toList();
   }
 
   // ---------------- cronômetro ----------------
@@ -648,12 +678,80 @@ class _PartidaRodandoPageState extends State<PartidaRodandoPage> {
     );
   }
 
+  Widget _substituicaoTile(Map<String, dynamic> s) {
+    final cs = Theme.of(context).colorScheme;
+    final entra = (s['jogador_entra'] as Map?)?.cast<String, dynamic>();
+    final sai = (s['jogador_sai'] as Map?)?.cast<String, dynamic>();
+    final entraNome = _nomeJogador(entra);
+    final saiNome = _nomeJogador(sai);
+    final jid = (entra?['id'] as int?) ?? 0;
+    final gols = _golsPorJogador[jid] ?? 0;
+    final asts = _assistsPorJogador[jid] ?? 0;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+      decoration: BoxDecoration(
+        color: cs.surfaceVariant.withOpacity(0.55),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: cs.primary.withOpacity(0.15)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Icon(Icons.arrow_upward, size: 16, color: cs.primary),
+              const SizedBox(width: 6),
+              _avatar(_wrapJogador(entra), size: 22),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  entraNome,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+              if (gols > 0)
+                Row(children: [const Icon(Icons.sports_soccer, size: 16), Text(' $gols')]),
+              const SizedBox(width: 6),
+              if (asts > 0)
+                Row(children: [const Icon(Icons.checkroom, size: 16), Text(' $asts')]),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Icon(Icons.arrow_downward, size: 16, color: cs.onSurface.withOpacity(0.45)),
+              const SizedBox(width: 6),
+              _avatar(_wrapJogador(sai), size: 20),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  saiNome,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: cs.onSurface.withOpacity(0.65)),
+                ),
+              ),
+              Text(
+                'Saiu',
+                style: TextStyle(color: cs.onSurface.withOpacity(0.45), fontSize: 12),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _teamColumn({
     required String titulo,
     required int placar,
     required List<Map<String, dynamic>> jogadores,
     required int timeId,
+    List<Map<String, dynamic>> substituicoes = const [],
+    bool mostrarSubstituicoes = false,
   }) {
+    final cs = Theme.of(context).colorScheme;
     return Expanded(
       child: Card(
         margin: const EdgeInsets.all(8),
@@ -664,14 +762,35 @@ class _PartidaRodandoPageState extends State<PartidaRodandoPage> {
             Text('$placar', style: const TextStyle(fontSize: 18)),
             const Divider(),
             Expanded(
-              child: ListView.builder(
-                itemCount: jogadores.length,
-                itemBuilder: (_, i) => _playerTile(
-                  pj: jogadores[i],
-                  timeId: timeId,
-                  timeNome: titulo,
-                  jogadoresDoTime: jogadores,
-                ),
+              child: ListView(
+                children: [
+                  ...jogadores.map((pj) => _playerTile(
+                        pj: pj,
+                        timeId: timeId,
+                        timeNome: titulo,
+                        jogadoresDoTime: jogadores,
+                      )),
+                  if (mostrarSubstituicoes && substituicoes.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 8),
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      decoration: BoxDecoration(
+                        color: cs.secondaryContainer,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: cs.primary.withOpacity(0.12)),
+                      ),
+                      child: const Center(
+                        child: Text(
+                          'Substituicoes',
+                          style: TextStyle(fontWeight: FontWeight.w700, letterSpacing: 0.6),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    ...substituicoes.map(_substituicaoTile),
+                  ],
+                ],
               ),
             ),
           ],
@@ -684,6 +803,15 @@ class _PartidaRodandoPageState extends State<PartidaRodandoPage> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final mostrarOriginais = _p.isFT;
+    final jogadoresA = mostrarOriginais ? _playersOrigA : _playersA;
+    final jogadoresB = mostrarOriginais ? _playersOrigB : _playersB;
+    final subsA = mostrarOriginais
+        ? _substituicoesPorTime(_substituicoesTodas, _p.timeAId)
+        : const <Map<String, dynamic>>[];
+    final subsB = mostrarOriginais
+        ? _substituicoesPorTime(_substituicoesTodas, _p.timeBId)
+        : const <Map<String, dynamic>>[];
 
     return Scaffold(
       appBar: AppBar(
@@ -746,14 +874,18 @@ class _PartidaRodandoPageState extends State<PartidaRodandoPage> {
                       _teamColumn(
                         titulo: _p.timeANome,
                         placar: _p.placarA,
-                        jogadores: _playersA,
+                        jogadores: jogadoresA,
                         timeId: _p.timeAId,
+                        substituicoes: subsA,
+                        mostrarSubstituicoes: mostrarOriginais,
                       ),
                       _teamColumn(
                         titulo: _p.timeBNome,
                         placar: _p.placarB,
-                        jogadores: _playersB,
+                        jogadores: jogadoresB,
                         timeId: _p.timeBId,
+                        substituicoes: subsB,
+                        mostrarSubstituicoes: mostrarOriginais,
                       ),
                     ],
                   ),
