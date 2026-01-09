@@ -431,11 +431,11 @@ class _PartidaRodandoPageState extends State<PartidaRodandoPage> {
       appBar: AppBar(
         title: Text('${_p.timeANome}  ${_p.placarA} x ${_p.placarB}  ${_p.timeBNome}'),
         actions: [
-          if (_p.isLive && kIsWeb && !_wakeLockAtivo)
+          if (_p.isLive && kIsWeb)
             IconButton(
-              tooltip: 'Manter tela ligada',
-              icon: const Icon(Icons.lock_open),
-              onPressed: _solicitarWakeLockManual,
+              tooltip: _wakeLockAtivo ? 'Tela ligada' : 'Manter tela ligada',
+              icon: Icon(_wakeLockAtivo ? Icons.lock : Icons.lock_open),
+              onPressed: _wakeLockAtivo ? null : _solicitarWakeLockManual,
             ),
           if (!_p.isLive && !_p.isFT)
             IconButton(
