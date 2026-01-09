@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pelada_chori/services/api_service.dart';
 
 class StatEntry {
   final String nome;
@@ -15,29 +16,47 @@ class HomeHighlightsCarousel extends StatefulWidget {
 
 class _HomeHighlightsCarouselState extends State<HomeHighlightsCarousel> {
   int _index = 0;
+  bool _loading = true;
+  String? _erro;
+  List<StatEntry> _vitorias = const [];
+  List<StatEntry> _gols = const [];
+  List<StatEntry> _assist = const [];
 
-  // MOCKS – troque pelos dados reais depois
-  final _vitorias = const [
-    StatEntry('Igor', 13),
-    StatEntry('Fernando', 12),
-    StatEntry('Kim', 11),
-    StatEntry('Pablo', 11),
-    StatEntry('Paulinho', 10),
-  ];
-  final _gols = const [
-    StatEntry('Michael', 11),
-    StatEntry('Pablo', 7),
-    StatEntry('Paulinho', 4),
-    StatEntry('Kim', 4),
-    StatEntry('Diego', 3),
-  ];
-  final _assist = const [
-    StatEntry('Paulinho', 6),
-    StatEntry('Igor', 5),
-    StatEntry('Fernando', 4),
-    StatEntry('Darlan', 3),
-    StatEntry('Leo', 3),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _carregarDestaques();
+  }
+
+  Future<void> _carregarDestaques() async {
+    try {
+      final resp = await ApiService.getDestaquesDoMes();
+      if (!mounted) return;
+      setState(() {
+        _vitorias = _mapEntries(resp.vitorias);
+        _gols = _mapEntries(resp.gols);
+        _assist = _mapEntries(resp.assistencias);
+        _loading = false;
+        _erro = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _erro = 'Erro ao carregar destaques.';
+      });
+    }
+  }
+
+  List<StatEntry> _mapEntries(List<Map<String, dynamic>> raw) {
+    return raw.map((e) {
+      final nome = (e['nome'] ?? '').toString().trim();
+      final valor = (e['valor'] is num)
+          ? (e['valor'] as num).toInt()
+          : int.tryParse((e['valor'] ?? '0').toString()) ?? 0;
+      return StatEntry(nome.isEmpty ? 'Jogador' : nome, valor);
+    }).toList();
+  }
 
   // breakpoints responsivos
   double _fractionForWidth(double w) {
@@ -63,15 +82,45 @@ class _HomeHighlightsCarouselState extends State<HomeHighlightsCarousel> {
   @override
   Widget build(BuildContext context) {
     final cards = <_Top5Card>[
-      _Top5Card(title: 'Top 5 Vitórias', items: _vitorias),
+      _Top5Card(title: 'Top 5 Vitorias', items: _vitorias),
       _Top5Card(title: 'Top 5 Gols', items: _gols),
-      _Top5Card(title: 'Top 5 Assistências', items: _assist),
+      _Top5Card(title: 'Top 5 Assistencias', items: _assist),
     ];
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final w = constraints.maxWidth;
         final h = _heightForWidth(w);
+
+        if (_loading) {
+          return SizedBox(
+            height: h,
+            child: const Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (_erro != null) {
+          return SizedBox(
+            height: h,
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _erro!,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: _carregarDestaques,
+                    child: const Text('Tentar novamente'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
         final fraction = _fractionForWidth(w);
         final itemExtent = _itemExtentForWidth(w);
         final controller = PageController(viewportFraction: fraction);
@@ -125,8 +174,12 @@ class _Top5Card extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    final max = (items.isEmpty) ? 1 : items.map((e) => e.valor).reduce((a, b) => a > b ? a : b);
+    final max = (items.isEmpty)
+        ? 1
+        : items.map((e) => e.valor).reduce((a, b) => a > b ? a : b);
+    final safeMax = max <= 0 ? 1 : max;
     final itemExtent = itemExtentOverride ?? 30.0;
+    final hasItems = items.isNotEmpty;
 
     final Color primary = cs.primary;
     final Color track = primary.withOpacity(0.18);
@@ -146,7 +199,7 @@ class _Top5Card extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Cabeçalho
+            // Cabecalho
             Row(
               children: [
                 Text(
@@ -174,87 +227,100 @@ class _Top5Card extends StatelessWidget {
 
             // Lista compacta
             Expanded(
-              child: ListView.builder(
-                padding: EdgeInsets.zero,
-                physics: const ClampingScrollPhysics(),
-                itemCount: items.length,
-                itemExtent: itemExtent,
-                itemBuilder: (context, i) {
-                  final e = items[i];
-                  final frac = (e.valor / max).clamp(0.0, 1.0);
-                  return Row(
-                    children: [
-                      // posição
-                      Container(
-                        width: 22,
-                        height: 22,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: badgeBg,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          '${i + 1}',
-                          style: textTheme.labelMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            color: textStrong,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      // nome
-                      Expanded(
-                        flex: 32,
-                        child: Text(
-                          e.nome,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            color: textStrong,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      // barra
-                      Expanded(
-                        flex: 60,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: SizedBox(
-                            height: 8,
-                            child: Stack(
-                              children: [
-                                Container(color: track),
-                                FractionallySizedBox(
-                                  widthFactor: frac,
-                                  child: Container(color: primary),
+              child: hasItems
+                  ? ListView.builder(
+                      padding: EdgeInsets.zero,
+                      physics: const ClampingScrollPhysics(),
+                      itemCount: items.length,
+                      itemExtent: itemExtent,
+                      itemBuilder: (context, i) {
+                        final e = items[i];
+                        final frac = (e.valor / safeMax).clamp(0.0, 1.0);
+                        return Row(
+                          children: [
+                            // posicao
+                            Container(
+                              width: 22,
+                              height: 22,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: badgeBg,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                '${i + 1}',
+                                style: textTheme.labelMedium?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                  color: textStrong,
                                 ),
-                              ],
+                              ),
                             ),
-                          ),
+                            const SizedBox(width: 8),
+                            // nome
+                            Expanded(
+                              flex: 32,
+                              child: Text(
+                                e.nome,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: textTheme.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  color: textStrong,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            // barra
+                            Expanded(
+                              flex: 60,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: SizedBox(
+                                  height: 8,
+                                  child: Stack(
+                                    children: [
+                                      Container(color: track),
+                                      FractionallySizedBox(
+                                        widthFactor: frac,
+                                        child: Container(color: primary),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            // valor
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: badgeBg,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                '${e.valor}',
+                                style: textTheme.labelLarge?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                  color: textStrong,
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    )
+                  : Center(
+                      child: Text(
+                        'Sem dados',
+                        style: textTheme.bodyMedium?.copyWith(
+                          color: textStrong.withOpacity(0.6),
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      // valor
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: badgeBg,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          '${e.valor}',
-                          style: textTheme.labelLarge?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            color: textStrong,
-                          ),
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
+                    ),
             ),
           ],
         ),
