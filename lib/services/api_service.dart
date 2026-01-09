@@ -602,6 +602,51 @@ class ApiService {
     throw Exception('Erro ao buscar partida: ${resp.body}');
   }
 
+  // Elenco ativo da partida (com substituicoes)
+  static Future<Map<String, dynamic>> getElencoPartida(int partidaId) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/partidas/$partidaId/elenco');
+    final resp = await _getWithAuth(uri);
+    if (resp.statusCode == 200) {
+      return (jsonDecode(resp.body) as Map).cast<String, dynamic>();
+    }
+    throw Exception('Erro ao buscar elenco: ${resp.body}');
+  }
+
+  static Future<Map<String, dynamic>> registrarSubstituicao({
+    required int partidaId,
+    required int timeId,
+    required int jogadorSaiId,
+    required int jogadorEntraId,
+  }) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/partidas/$partidaId/substituicoes');
+    final body = jsonEncode({
+      'time_id': timeId,
+      'jogador_sai_id': jogadorSaiId,
+      'jogador_entra_id': jogadorEntraId,
+    });
+    final resp = await _postWithAuth(
+      uri,
+      headers: {'Content-Type': 'application/json'},
+      body: body,
+    );
+    if (resp.statusCode == 200 || resp.statusCode == 201) {
+      return (jsonDecode(resp.body) as Map).cast<String, dynamic>();
+    }
+    throw Exception('Erro ao registrar substituicao: ${resp.statusCode} ${resp.body}');
+  }
+
+  static Future<Map<String, dynamic>> desfazerSubstituicao({
+    required int partidaId,
+    required int substituicaoId,
+  }) async {
+    final uri = Uri.parse('${ApiConfig.baseUrl}/partidas/$partidaId/substituicoes/$substituicaoId/desfazer');
+    final resp = await _postWithAuth(uri);
+    if (resp.statusCode == 200) {
+      return (jsonDecode(resp.body) as Map).cast<String, dynamic>();
+    }
+    throw Exception('Erro ao desfazer substituicao: ${resp.statusCode} ${resp.body}');
+  }
+
 
   static Future<bool> updateMeusDados(Map<String, dynamic> payload) async {
     try {

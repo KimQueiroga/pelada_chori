@@ -30,11 +30,14 @@ class _PartidaRodandoPageState extends State<PartidaRodandoPage> {
   // times / jogadores
   List<Map<String, dynamic>> _playersA = const [];
   List<Map<String, dynamic>> _playersB = const [];
+  List<Map<String, dynamic>> _todosJogadores = const [];
+  List<Map<String, dynamic>> _substituicoes = const [];
 
   // gols e contagens por jogador
   List<Map<String, dynamic>> _gols = const [];
   final Map<int, int> _golsPorJogador = {};
   final Map<int, int> _assistsPorJogador = {};
+  bool _acaoSubstituicao = false;
   bool _wakeLockAtivo = false;
   bool _wakeLockAvisado = false;
 
@@ -92,25 +95,39 @@ class _PartidaRodandoPageState extends State<PartidaRodandoPage> {
   }
 
   Future<void> _carregarTimes() async {
-    final times = await ApiService.getTimesDoSorteio(_p.sorteioId);
+    final results = await Future.wait([
+      ApiService.getTimesDoSorteio(_p.sorteioId),
+      ApiService.getElencoPartida(_p.id),
+    ]);
 
-    Map<String, dynamic> _byId(int id) {
-      final t = times.cast<Map<String, dynamic>>().firstWhere(
-            (x) => x['id'] == id,
-            orElse: () => <String, dynamic>{},
-          );
-      return t;
-    }
+    final times = results[0] as List<Map<String, dynamic>>;
+    final elenco = (results[1] as Map).cast<String, dynamic>();
 
-    List<Map<String, dynamic>> _toPlayers(Map<String, dynamic> t) =>
+    List<Map<String, dynamic>> toPlayers(Map<String, dynamic> t) =>
         ((t['jogadores'] as List?) ?? const [])
             .map<Map<String, dynamic>>((e) => (e as Map).cast<String, dynamic>())
             .toList();
 
+    List<Map<String, dynamic>> flattenJogadores(List<Map<String, dynamic>> times) {
+      final all = <Map<String, dynamic>>[];
+      for (final t in times) {
+        final timeId = (t['id'] as int?) ?? 0;
+        final timeNome = (t['nome'] ?? '').toString();
+        final jogadores = (t['jogadores'] as List?) ?? const [];
+        for (final j in jogadores) {
+          final map = Map<String, dynamic>.from((j as Map).cast<String, dynamic>());
+          map['time_id'] = timeId;
+          map['time_nome'] = timeNome;
+          all.add(map);
+        }
+      }
+      return all;
+    }
+
     if (!mounted) return;
     setState(() {
-      _playersA = _toPlayers(_byId(_p.timeAId));
-      _playersB = _toPlayers(_byId(_p.timeBId));
+      _todosJogadores = flattenJogadores(times);
+      _aplicarElenco(elenco);
     });
   }
 
@@ -127,6 +144,33 @@ class _PartidaRodandoPageState extends State<PartidaRodandoPage> {
         _assistsPorJogador.update(assist, (v) => v + 1, ifAbsent: () => 1);
       }
     }
+  }
+
+  void _aplicarElenco(Map<String, dynamic> elenco) {
+    List<Map<String, dynamic>> toPlayers(Map<String, dynamic> t) =>
+        ((t['jogadores'] as List?) ?? const [])
+            .map<Map<String, dynamic>>((e) => (e as Map).cast<String, dynamic>())
+            .toList();
+
+    final timeA = (elenco['time_a'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final timeB = (elenco['time_b'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final subs = (elenco['substituicoes'] as List?) ?? const [];
+
+    _playersA = toPlayers(timeA);
+    _playersB = toPlayers(timeB);
+    _substituicoes = subs
+        .map<Map<String, dynamic>>((e) => (e as Map).cast<String, dynamic>())
+        .toList();
+  }
+
+  String _nomeJogador(Map<String, dynamic>? j) {
+    if (j == null) return 'Jogador';
+    return (j['apelido'] ?? j['nome'] ?? 'Jogador').toString();
+  }
+
+  String _nomeJogadorPj(Map<String, dynamic> pj) {
+    final j = (pj['jogador'] as Map?)?.cast<String, dynamic>();
+    return _nomeJogador(j);
   }
 
   // ---------------- cronômetro ----------------
@@ -251,6 +295,220 @@ class _PartidaRodandoPageState extends State<PartidaRodandoPage> {
     } finally {
       if (mounted) setState(() => _acao = false);
     }
+  }
+
+  Future<void> _registrarSubstituicao({
+    required int timeId,
+    required int jogadorSaiId,
+    required int jogadorEntraId,
+  }) async {
+    setState(() => _acaoSubstituicao = true);
+    try {
+      final elenco = await ApiService.registrarSubstituicao(
+        partidaId: _p.id,
+        timeId: timeId,
+        jogadorSaiId: jogadorSaiId,
+        jogadorEntraId: jogadorEntraId,
+      );
+      if (!mounted) return;
+      setState(() => _aplicarElenco(elenco));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro: $e')));
+    } finally {
+      if (mounted) setState(() => _acaoSubstituicao = false);
+    }
+  }
+
+  Future<void> _desfazerSubstituicao(int substituicaoId) async {
+    setState(() => _acaoSubstituicao = true);
+    try {
+      final elenco = await ApiService.desfazerSubstituicao(
+        partidaId: _p.id,
+        substituicaoId: substituicaoId,
+      );
+      if (!mounted) return;
+      setState(() => _aplicarElenco(elenco));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro: $e')));
+    } finally {
+      if (mounted) setState(() => _acaoSubstituicao = false);
+    }
+  }
+
+  Future<void> _abrirSubstituicoes() async {
+    if (!_p.isLive) return;
+
+    int? timeId = _p.timeAId;
+    int? jogadorSaiId;
+    int? jogadorEntraId;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.85,
+        builder: (ctx, scrollController) {
+          return StatefulBuilder(builder: (ctx, setSB) {
+            final ativosIds = <int>{
+              for (final p in _playersA) (p['jogador_id'] as int),
+              for (final p in _playersB) (p['jogador_id'] as int),
+            };
+
+            final disponiveis = _todosJogadores
+                .where((p) => !ativosIds.contains(p['jogador_id'] as int))
+                .toList();
+
+            final jogadoresDoTime =
+                timeId == _p.timeAId ? _playersA : _playersB;
+
+            if (jogadorSaiId != null &&
+                !jogadoresDoTime.any((p) => p['jogador_id'] == jogadorSaiId)) {
+              jogadorSaiId = null;
+            }
+            if (jogadorEntraId != null &&
+                !disponiveis.any((p) => p['jogador_id'] == jogadorEntraId)) {
+              jogadorEntraId = null;
+            }
+
+            final podeConfirmar =
+                timeId != null && jogadorSaiId != null && jogadorEntraId != null;
+
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 16,
+                right: 16,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
+                top: 12,
+              ),
+              child: ListView(
+                controller: scrollController,
+                children: [
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Substituicoes',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Fechar',
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                  if (_substituicoes.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    const Text('Ativas', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 6),
+                    ..._substituicoes.map((s) {
+                      final timeNome = (s['time_id'] == _p.timeAId)
+                          ? _p.timeANome
+                          : _p.timeBNome;
+                      final sai = _nomeJogador((s['jogador_sai'] as Map?)?.cast<String, dynamic>());
+                      final entra = _nomeJogador((s['jogador_entra'] as Map?)?.cast<String, dynamic>());
+                      return Card(
+                        child: ListTile(
+                          title: Text('$sai -> $entra'),
+                          subtitle: Text(timeNome),
+                          trailing: TextButton(
+                            onPressed: _acaoSubstituicao
+                                ? null
+                                : () async {
+                                    Navigator.pop(ctx);
+                                    await _desfazerSubstituicao(s['id'] as int);
+                                  },
+                            child: const Text('Desfazer'),
+                          ),
+                        ),
+                      );
+                    }),
+                    const Divider(height: 24),
+                  ],
+                  const Text('Nova substituicao', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<int>(
+                    value: timeId,
+                    items: [
+                      DropdownMenuItem(
+                        value: _p.timeAId,
+                        child: Text(_p.timeANome),
+                      ),
+                      DropdownMenuItem(
+                        value: _p.timeBId,
+                        child: Text(_p.timeBNome),
+                      ),
+                    ],
+                    onChanged: (v) => setSB(() => timeId = v),
+                    decoration: const InputDecoration(labelText: 'Time'),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text('Jogador que sai', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 6),
+                  ...jogadoresDoTime.map((p) {
+                    final jid = p['jogador_id'] as int;
+                    return RadioListTile<int>(
+                      value: jid,
+                      groupValue: jogadorSaiId,
+                      onChanged: (v) => setSB(() => jogadorSaiId = v),
+                      title: Row(
+                        children: [
+                          _avatar(p),
+                          const SizedBox(width: 8),
+                          Expanded(child: Text(_nomeJogadorPj(p))),
+                        ],
+                      ),
+                    );
+                  }),
+                  const SizedBox(height: 8),
+                  const Text('Jogador que entra (fora da partida)',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 6),
+                  if (disponiveis.isEmpty)
+                    const Text('Nenhum jogador disponivel.'),
+                  ...disponiveis.map((p) {
+                    final timeNome = (p['time_nome'] ?? '').toString();
+                    return RadioListTile<int>(
+                      value: p['jogador_id'] as int,
+                      groupValue: jogadorEntraId,
+                      onChanged: (v) => setSB(() => jogadorEntraId = v),
+                      title: Row(
+                        children: [
+                          _avatar(p),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text('${_nomeJogadorPj(p)}${timeNome.isEmpty ? '' : ' - $timeNome'}'),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                  const SizedBox(height: 12),
+                  FilledButton.icon(
+                    onPressed: (_acaoSubstituicao || !podeConfirmar)
+                        ? null
+                        : () async {
+                            Navigator.pop(ctx);
+                            await _registrarSubstituicao(
+                              timeId: timeId!,
+                              jogadorSaiId: jogadorSaiId!,
+                              jogadorEntraId: jogadorEntraId!,
+                            );
+                          },
+                    icon: const Icon(Icons.swap_horiz),
+                    label: const Text('Confirmar substituicao'),
+                  ),
+                ],
+              ),
+            );
+          });
+        },
+      ),
+    );
   }
 
   // ---------------- registrar gol via clique no jogador ----------------
@@ -436,6 +694,14 @@ class _PartidaRodandoPageState extends State<PartidaRodandoPage> {
               tooltip: _wakeLockAtivo ? 'Tela ligada' : 'Manter tela ligada',
               icon: Icon(_wakeLockAtivo ? Icons.lock : Icons.lock_open),
               onPressed: _wakeLockAtivo ? null : _solicitarWakeLockManual,
+            ),
+          if (_p.isLive)
+            IconButton(
+              tooltip: 'Substituicoes',
+              icon: _acaoSubstituicao
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.swap_horiz),
+              onPressed: _acaoSubstituicao ? null : _abrirSubstituicoes,
             ),
           if (!_p.isLive && !_p.isFT)
             IconButton(
