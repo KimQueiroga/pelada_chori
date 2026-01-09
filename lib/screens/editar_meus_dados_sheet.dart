@@ -18,6 +18,7 @@ class _EditarMeusDadosSheetState extends State<EditarMeusDadosSheet> {
   late final TextEditingController _foto;
   String _posicao = 'Meio';
   bool _salvando = false;
+  final List<String> _posicoes = const ['Defesa', 'Meio', 'Ataque'];
 
   @override
   void initState() {
@@ -48,7 +49,7 @@ class _EditarMeusDadosSheetState extends State<EditarMeusDadosSheet> {
     final payload = {
       'nome': _nome.text.trim(),
       'apelido': _apelido.text.trim().isEmpty ? null : _apelido.text.trim(),
-      'posicao': _posicao, // Defesa | Meio | Ataque
+      'posicao': _posicao,
       'numero_camisa':
           _numero.text.trim().isEmpty ? null : int.tryParse(_numero.text.trim()),
       'foto': _foto.text.trim().isEmpty ? null : _foto.text.trim(),
@@ -69,6 +70,26 @@ class _EditarMeusDadosSheetState extends State<EditarMeusDadosSheet> {
   @override
   Widget build(BuildContext context) {
     final insets = MediaQuery.of(context).viewInsets;
+    final cs = Theme.of(context).colorScheme;
+
+    InputDecoration deco(String label, IconData icon, {String? hint}) {
+      return InputDecoration(
+        labelText: label,
+        hintText: hint,
+        prefixIcon: Icon(icon),
+        filled: true,
+        fillColor: cs.surfaceVariant.withOpacity(0.45),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: cs.primary.withOpacity(0.15)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: cs.primary.withOpacity(0.12)),
+        ),
+      );
+    }
+
     return Padding(
       padding: EdgeInsets.only(bottom: insets.bottom),
       child: SingleChildScrollView(
@@ -81,21 +102,35 @@ class _EditarMeusDadosSheetState extends State<EditarMeusDadosSheet> {
             children: [
               Center(
                 child: Container(
-                  width: 40,
+                  width: 44,
                   height: 4,
-                  margin: const EdgeInsets.only(bottom: 16),
+                  margin: const EdgeInsets.only(bottom: 14),
                   decoration: BoxDecoration(
-                    color: Colors.black26,
+                    color: cs.onSurface.withOpacity(0.25),
                     borderRadius: BorderRadius.circular(999),
                   ),
                 ),
               ),
-              Text('Editar meus dados', style: Theme.of(context).textTheme.titleLarge),
+              Text(
+                'Editar meus dados',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleLarge
+                    ?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Atualize suas informacoes pessoais',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: cs.onSurface.withOpacity(0.6),
+                    ),
+              ),
               const SizedBox(height: 16),
 
               TextFormField(
                 controller: _nome,
-                decoration: const InputDecoration(labelText: 'Nome'),
+                decoration: deco('Nome', Icons.badge_outlined),
+                textInputAction: TextInputAction.next,
                 validator: (v) =>
                     (v == null || v.trim().isEmpty) ? 'Informe seu nome' : null,
               ),
@@ -103,18 +138,17 @@ class _EditarMeusDadosSheetState extends State<EditarMeusDadosSheet> {
 
               TextFormField(
                 controller: _apelido,
-                decoration: const InputDecoration(labelText: 'Apelido (opcional)'),
+                decoration: deco('Apelido (opcional)', Icons.person_outline),
+                textInputAction: TextInputAction.next,
               ),
               const SizedBox(height: 12),
 
               DropdownButtonFormField<String>(
                 value: _posicao,
-                decoration: const InputDecoration(labelText: 'Posição'),
-                items: const [
-                  DropdownMenuItem(value: 'Defesa', child: Text('Defesa')),
-                  DropdownMenuItem(value: 'Meio', child: Text('Meio')),
-                  DropdownMenuItem(value: 'Ataque', child: Text('Ataque')),
-                ],
+                decoration: deco('Posicao', Icons.sports_soccer),
+                items: _posicoes
+                    .map((p) => DropdownMenuItem(value: p, child: Text(p)))
+                    .toList(),
                 onChanged: (v) => setState(() => _posicao = v ?? 'Meio'),
               ),
               const SizedBox(height: 12),
@@ -122,8 +156,7 @@ class _EditarMeusDadosSheetState extends State<EditarMeusDadosSheet> {
               TextFormField(
                 controller: _numero,
                 keyboardType: TextInputType.number,
-                decoration:
-                    const InputDecoration(labelText: 'Número da camisa (opcional)'),
+                decoration: deco('Numero da camisa (opcional)', Icons.tag_outlined),
                 validator: (v) {
                   if (v == null || v.trim().isEmpty) return null;
                   final n = int.tryParse(v.trim());
@@ -135,10 +168,9 @@ class _EditarMeusDadosSheetState extends State<EditarMeusDadosSheet> {
 
               TextFormField(
                 controller: _foto,
-                decoration:
-                    const InputDecoration(labelText: 'URL da foto (opcional)'),
+                decoration: deco('URL da foto (opcional)', Icons.link),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 18),
 
               _salvando
                   ? const Center(child: CircularProgressIndicator())

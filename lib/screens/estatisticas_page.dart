@@ -27,9 +27,9 @@ class _EstatisticasPageState extends State<EstatisticasPage> {
   ];
 
   final _estatisticas = const <_Option<String>>[
-    _Option('vitorias', 'Vitorias'),
+    _Option('vitorias', 'Vitórias'),
     _Option('gols', 'Gols'),
-    _Option('assistencias', 'Assistencias'),
+    _Option('assistencias', 'Assistências'),
   ];
 
   bool _loading = true;
@@ -91,7 +91,7 @@ class _EstatisticasPageState extends State<EstatisticasPage> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _erro = 'Erro ao carregar estatisticas.';
+        _erro = 'Erro ao carregar estatísticas.';
       });
     }
   }
@@ -106,11 +106,11 @@ class _EstatisticasPageState extends State<EstatisticasPage> {
 
   String _estatisticaLabel(String key) {
     return _estatisticas
-            .firstWhere(
-              (e) => e.value == key,
-              orElse: () => const _Option('vitorias', 'Vitorias'),
-            )
-            .label;
+        .firstWhere(
+          (e) => e.value == key,
+          orElse: () => const _Option('vitorias', 'Vitórias'),
+        )
+        .label;
   }
 
   Future<void> _selecionarAno() async {
@@ -140,7 +140,7 @@ class _EstatisticasPageState extends State<EstatisticasPage> {
       ),
     ];
     final escolhido = await _showOptions<int?>(
-      title: 'Mes',
+      title: 'Mês',
       options: opt,
       selected: _mes,
     );
@@ -176,7 +176,7 @@ class _EstatisticasPageState extends State<EstatisticasPage> {
 
   Future<void> _selecionarEstatistica() async {
     final escolhido = await _showOptions<String>(
-      title: 'Estatistica',
+      title: 'Estatística',
       options: _estatisticas,
       selected: _estatistica,
     );
@@ -214,6 +214,25 @@ class _EstatisticasPageState extends State<EstatisticasPage> {
     _carregarStats(showLoading: true);
   }
 
+  Widget _sectionCard(Widget child, ColorScheme cs) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: cs.primary.withOpacity(0.15)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -229,7 +248,7 @@ class _EstatisticasPageState extends State<EstatisticasPage> {
         backgroundColor: bgTop,
         elevation: 0,
         title: Text(
-          'Estatisticas',
+          'Estatísticas',
           style: TextStyle(
             color: textStrong,
             fontWeight: FontWeight.w600,
@@ -247,183 +266,269 @@ class _EstatisticasPageState extends State<EstatisticasPage> {
         ),
         child: SafeArea(
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const SizedBox(height: 12),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: [
-                    _FilterButton(
-                      label: 'Ano',
-                      value: _ano?.toString() ?? 'Todos',
-                      borderColor: pillBorder,
-                      textColor: textStrong,
-                      onTap: _selecionarAno,
-                    ),
-                    _FilterButton(
-                      label: 'Mes',
-                      value: (_mes != null && _mes! >= 1 && _mes! <= 12)
-                          ? _meses[_mes! - 1]
-                          : 'Todos',
-                      borderColor: pillBorder,
-                      textColor: textStrong,
-                      onTap: _selecionarMes,
-                    ),
-                    _FilterButton(
-                      label: 'Tipo',
-                      value: _estatisticaLabel(_estatistica),
-                      borderColor: pillBorder,
-                      textColor: textStrong,
-                      onTap: _selecionarEstatistica,
-                    ),
-                    _FilterButton(
-                      label: 'Jogador',
-                      value: _jogadorId == null
-                          ? 'Todos'
-                          : _jogadores.isEmpty
-                              ? 'Jogador $_jogadorId'
-                              : _playerLabel(
-                                  _jogadores.firstWhere(
-                                    (j) => (j['id'] as num?)?.toInt() == _jogadorId,
-                                    orElse: () => const {},
-                                  ),
-                                ),
-                      borderColor: pillBorder,
-                      textColor: textStrong,
-                      onTap: _selecionarJogador,
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: _resetFiltros,
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: pillBorder),
-                        foregroundColor: textStrong,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: _sectionCard(
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Filtros',
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w800),
                       ),
-                      icon: const Icon(Icons.refresh, size: 18),
-                      label: const Text('Reset'),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 44,
-                      child: Text(
-                        'Rank',
-                        style: TextStyle(color: textMuted),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 10,
+                        children: [
+                          _FilterButton(
+                            label: 'Ano',
+                            value: _ano?.toString() ?? 'Todos',
+                            borderColor: pillBorder,
+                            fillColor: cs.surfaceVariant.withOpacity(0.45),
+                            textColor: textStrong,
+                            onTap: _selecionarAno,
+                          ),
+                          _FilterButton(
+                            label: 'Mês',
+                            value: (_mes != null && _mes! >= 1 && _mes! <= 12)
+                                ? _meses[_mes! - 1]
+                                : 'Todos',
+                            borderColor: pillBorder,
+                            fillColor: cs.surfaceVariant.withOpacity(0.45),
+                            textColor: textStrong,
+                            onTap: _selecionarMes,
+                          ),
+                          _FilterButton(
+                            label: 'Tipo',
+                            value: _estatisticaLabel(_estatistica),
+                            borderColor: pillBorder,
+                            fillColor: cs.surfaceVariant.withOpacity(0.45),
+                            textColor: textStrong,
+                            onTap: _selecionarEstatistica,
+                          ),
+                          _FilterButton(
+                            label: 'Jogador',
+                            value: _jogadorId == null
+                                ? 'Todos'
+                                : _jogadores.isEmpty
+                                    ? 'Jogador $_jogadorId'
+                                    : _playerLabel(
+                                        _jogadores.firstWhere(
+                                          (j) =>
+                                              (j['id'] as num?)?.toInt() == _jogadorId,
+                                          orElse: () => const {},
+                                        ),
+                                      ),
+                            borderColor: pillBorder,
+                            fillColor: cs.surfaceVariant.withOpacity(0.45),
+                            textColor: textStrong,
+                            onTap: _selecionarJogador,
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: _resetFiltros,
+                            style: OutlinedButton.styleFrom(
+                              side: BorderSide(color: pillBorder),
+                              foregroundColor: textStrong,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                            ),
+                            icon: const Icon(Icons.refresh, size: 18),
+                            label: const Text('Reset'),
+                          ),
+                        ],
                       ),
-                    ),
-                    Expanded(
-                      child: Text(
-                        'Jogador',
-                        style: TextStyle(color: textMuted),
-                      ),
-                    ),
-                    Text(
-                      _estatisticaLabel(_estatistica),
-                      style: TextStyle(color: textMuted),
-                    ),
-                  ],
+                    ],
+                  ),
+                  cs,
                 ),
               ),
               const SizedBox(height: 12),
               Expanded(
-                child: _loading
-                    ? Center(
-                        child: CircularProgressIndicator(
-                          color: cs.primary,
-                        ),
-                      )
-                    : _erro != null
-                        ? Center(
-                            child: Text(
-                              _erro!,
-                              style: TextStyle(color: textStrong),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: _sectionCard(
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              'Resultados',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.w800),
                             ),
-                          )
-                        : _items.isEmpty
-                            ? Center(
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Opacity(
-                                      opacity: 0.35,
-                                      child: Image.asset(
-                                        'assets/logo_pelada.png',
-                                        width: 72,
-                                        height: 72,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 12),
-                                    Text(
-                                      'Sem dados',
-                                      style: TextStyle(
-                                        color: textStrong,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              )
-                            : RefreshIndicator(
-                                onRefresh: () => _carregarStats(showLoading: true),
-                                child: ListView.separated(
-                                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                                  itemCount: _items.length,
-                                  separatorBuilder: (_, __) =>
-                                      const SizedBox(height: 12),
-                                  itemBuilder: (context, index) {
-                                    final item = _items[index];
-                                    return Row(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        SizedBox(
-                                          width: 44,
-                                          child: Text(
-                                            '${index + 1}',
-                                            style: TextStyle(
-                                              color: textStrong,
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                          ),
-                                        ),
-                                        Expanded(
-                                          child: Text(
-                                            item.nome,
-                                            style: TextStyle(
-                                              color: textStrong,
-                                              fontWeight: FontWeight.w700,
-                                              fontSize: 16,
-                                            ),
-                                          ),
-                                        ),
-                                        Text(
-                                          '${item.valor}',
-                                          style: TextStyle(
-                                            color: textStrong,
-                                            fontWeight: FontWeight.w700,
-                                            fontSize: 16,
-                                          ),
-                                        ),
-                                      ],
-                                    );
-                                  },
-                                ),
+                            const Spacer(),
+                            Text(
+                              _estatisticaLabel(_estatistica),
+                              style: TextStyle(
+                                color: cs.primary,
+                                fontWeight: FontWeight.w700,
                               ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${_items.length} registros',
+                          style: TextStyle(color: textMuted),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            SizedBox(
+                              width: 44,
+                              child: Text(
+                                'Rank',
+                                style: TextStyle(color: textMuted),
+                              ),
+                            ),
+                            Expanded(
+                              child: Text(
+                                'Jogador',
+                                style: TextStyle(color: textMuted),
+                              ),
+                            ),
+                            Text(
+                              _estatisticaLabel(_estatistica),
+                              style: TextStyle(color: textMuted),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Expanded(
+                          child: _loading
+                              ? Center(
+                                  child: CircularProgressIndicator(
+                                    color: cs.primary,
+                                  ),
+                                )
+                              : _erro != null
+                                  ? Center(
+                                      child: Text(
+                                        _erro!,
+                                        style: TextStyle(color: textStrong),
+                                      ),
+                                    )
+                                  : _items.isEmpty
+                                      ? Center(
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Opacity(
+                                                opacity: 0.35,
+                                                child: Image.asset(
+                                                  'assets/logo_pelada.png',
+                                                  width: 72,
+                                                  height: 72,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 12),
+                                              Text(
+                                                'Sem dados',
+                                                style: TextStyle(
+                                                  color: textStrong,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        )
+                                      : RefreshIndicator(
+                                          onRefresh: () =>
+                                              _carregarStats(showLoading: true),
+                                          child: ListView.separated(
+                                            padding:
+                                                const EdgeInsets.fromLTRB(0, 0, 0, 8),
+                                            itemCount: _items.length,
+                                            separatorBuilder: (_, __) => Divider(
+                                              height: 16,
+                                              color: cs.onSurface.withOpacity(0.08),
+                                            ),
+                                            itemBuilder: (context, index) {
+                                              final item = _items[index];
+                                              return Padding(
+                                                padding: const EdgeInsets.symmetric(
+                                                  horizontal: 4,
+                                                  vertical: 2,
+                                                ),
+                                                child: Row(
+                                                  children: [
+                                                    Container(
+                                                      width: 32,
+                                                      height: 32,
+                                                      alignment: Alignment.center,
+                                                      decoration: BoxDecoration(
+                                                        color:
+                                                            cs.primary.withOpacity(0.12),
+                                                        borderRadius:
+                                                            BorderRadius.circular(10),
+                                                      ),
+                                                      child: Text(
+                                                        '${index + 1}',
+                                                        style: TextStyle(
+                                                          color: cs.primary,
+                                                          fontWeight: FontWeight.w800,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 12),
+                                                    Expanded(
+                                                      child: Text(
+                                                        item.nome,
+                                                        style: TextStyle(
+                                                          color: textStrong,
+                                                          fontWeight: FontWeight.w700,
+                                                          fontSize: 16,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    Container(
+                                                      padding: const EdgeInsets.symmetric(
+                                                        horizontal: 10,
+                                                        vertical: 4,
+                                                      ),
+                                                      decoration: BoxDecoration(
+                                                        color:
+                                                            cs.primary.withOpacity(0.12),
+                                                        borderRadius:
+                                                            BorderRadius.circular(10),
+                                                      ),
+                                                      child: Text(
+                                                        '${item.valor}',
+                                                        style: TextStyle(
+                                                          color: cs.primary,
+                                                          fontWeight: FontWeight.w800,
+                                                          fontSize: 14,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                        ),
+                        ),
+                      ],
+                    ),
+                    cs,
+                  ),
+                ),
               ),
+              const SizedBox(height: 12),
             ],
           ),
         ),
@@ -461,6 +566,7 @@ class _FilterButton extends StatelessWidget {
     required this.value,
     required this.onTap,
     required this.borderColor,
+    required this.fillColor,
     required this.textColor,
   });
 
@@ -468,6 +574,7 @@ class _FilterButton extends StatelessWidget {
   final String value;
   final VoidCallback onTap;
   final Color borderColor;
+  final Color fillColor;
   final Color textColor;
 
   @override
@@ -479,6 +586,7 @@ class _FilterButton extends StatelessWidget {
         style: OutlinedButton.styleFrom(
           side: BorderSide(color: borderColor),
           foregroundColor: textColor,
+          backgroundColor: fillColor,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
@@ -523,7 +631,7 @@ class _OptionSheet<T> extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: sheetColor,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: SafeArea(
         top: false,
@@ -562,18 +670,18 @@ class _OptionSheet<T> extends StatelessWidget {
                   color: textStrong.withOpacity(0.08),
                 ),
                 itemBuilder: (context, index) {
-                    final opt = options[index];
-                    final isSelected = opt.value == selected;
-                    return ListTile(
-                      title: Text(
-                        opt.label,
-                        style: TextStyle(color: textStrong),
-                      ),
-                      trailing: isSelected
-                          ? Icon(Icons.check, color: textStrong)
-                          : null,
-                      onTap: () => Navigator.pop(context, opt.value),
-                    );
+                  final opt = options[index];
+                  final isSelected = opt.value == selected;
+                  return ListTile(
+                    title: Text(
+                      opt.label,
+                      style: TextStyle(color: textStrong),
+                    ),
+                    trailing: isSelected
+                        ? Icon(Icons.check, color: textStrong)
+                        : null,
+                    onTap: () => Navigator.pop(context, opt.value),
+                  );
                 },
               ),
             ),

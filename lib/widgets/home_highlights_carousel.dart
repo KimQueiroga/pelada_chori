@@ -114,16 +114,16 @@ class _HomeHighlightsCarouselState extends State<HomeHighlightsCarousel> {
   }
 
   double _heightForWidth(double w) {
-    if (w < 360) return 170;
-    if (w < 480) return 190;
-    if (w < 840) return 210;
-    return 230;
+    if (w < 360) return 182;
+    if (w < 480) return 200;
+    if (w < 840) return 220;
+    return 240;
   }
 
   double _itemExtentForWidth(double w) {
-    if (w < 360) return 26;
-    if (w < 480) return 28;
-    return 30;
+    if (w < 360) return 28;
+    if (w < 480) return 30;
+    return 32;
   }
 
   @override
@@ -252,20 +252,21 @@ class _Top5Card extends StatelessWidget {
     final hasItems = items.isNotEmpty;
 
     final Color primary = cs.primary;
-    final Color track = primary.withOpacity(0.18);
+    final Color track = primary.withOpacity(0.16);
     final Color badgeBg = primary.withOpacity(0.12);
-    final Color cardBg = Theme.of(context).cardColor;
+    final Color cardBg = cs.surface;
     final Color textStrong = cs.onSurface;
 
     return Card(
-      elevation: 1.5,
+      elevation: 2.0,
       color: cardBg,
+      surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: cs.primary.withOpacity(0.20)),
+        side: BorderSide(color: cs.primary.withOpacity(0.16)),
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -287,19 +288,19 @@ class _Top5Card extends StatelessWidget {
                     minimumSize: const Size(0, 0),
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     visualDensity: VisualDensity.compact,
-                    foregroundColor: textStrong.withOpacity(0.60),
+                    foregroundColor: textStrong.withOpacity(0.50),
                   ),
                   child: const Text('Ver detalhes'),
                 ),
               ],
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 10),
 
             // Lista compacta
             Expanded(
               child: hasItems
                   ? ListView.builder(
-                      padding: EdgeInsets.zero,
+                      padding: const EdgeInsets.symmetric(vertical: 4),
                       physics: const ClampingScrollPhysics(),
                       itemCount: items.length,
                       itemExtent: itemExtent,
@@ -346,7 +347,7 @@ class _Top5Card extends StatelessWidget {
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(8),
                                 child: SizedBox(
-                                  height: 8,
+                                  height: 10,
                                   child: Stack(
                                     children: [
                                       Container(color: track),

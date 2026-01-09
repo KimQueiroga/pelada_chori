@@ -151,7 +151,7 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Entre para registrar gols e assistencias',
+                    'Entre para visualizar gols e assistencias',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: cs.onSurface.withOpacity(0.6),
