@@ -1,7 +1,9 @@
 // lib/screens/partida_rodando_page.dart
 import 'dart:async';
 import 'dart:ui' show FontFeature;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../services/api_service.dart';
 import '../models/partida_model.dart';
@@ -33,17 +35,23 @@ class _PartidaRodandoPageState extends State<PartidaRodandoPage> {
   List<Map<String, dynamic>> _gols = const [];
   final Map<int, int> _golsPorJogador = {};
   final Map<int, int> _assistsPorJogador = {};
+  bool _wakeLockAtivo = false;
+  bool _wakeLockAvisado = false;
 
   @override
   void initState() {
     super.initState();
     _p = widget.partida;
+    _syncWakeLock();
     _bootstrap();
   }
 
   @override
   void dispose() {
     _ticker?.cancel();
+    if (_wakeLockAtivo) {
+      WakelockPlus.disable();
+    }
     super.dispose();
   }
 
@@ -139,6 +147,32 @@ class _PartidaRodandoPageState extends State<PartidaRodandoPage> {
     } else {
       _decorrido = Duration.zero;
     }
+
+    _syncWakeLock();
+  }
+
+  void _syncWakeLock() {
+    final deveManterTelaLigada = _p.isLive;
+    if (deveManterTelaLigada == _wakeLockAtivo) return;
+    _wakeLockAtivo = deveManterTelaLigada;
+    final Future<void> operacao =
+        deveManterTelaLigada ? WakelockPlus.enable() : WakelockPlus.disable();
+    operacao.catchError((_) {
+      if (!deveManterTelaLigada) return;
+      _avisarWakeLockNaoSuportado();
+    });
+  }
+
+  void _avisarWakeLockNaoSuportado() {
+    if (!kIsWeb || _wakeLockAvisado || !mounted) return;
+    _wakeLockAvisado = true;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Seu navegador nao permite manter a tela ligada automaticamente. Mantenha a tela ativa manualmente.',
+        ),
+      ),
+    );
   }
 
   String _fmt(Duration d) {
