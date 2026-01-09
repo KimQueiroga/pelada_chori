@@ -42,7 +42,7 @@ class _PartidaRodandoPageState extends State<PartidaRodandoPage> {
   void initState() {
     super.initState();
     _p = widget.partida;
-    _syncWakeLock();
+    unawaited(_syncWakeLock());
     _bootstrap();
   }
 
@@ -50,7 +50,7 @@ class _PartidaRodandoPageState extends State<PartidaRodandoPage> {
   void dispose() {
     _ticker?.cancel();
     if (_wakeLockAtivo) {
-      WakelockPlus.disable();
+      unawaited(WakelockPlus.disable());
     }
     super.dispose();
   }
@@ -139,6 +139,7 @@ class _PartidaRodandoPageState extends State<PartidaRodandoPage> {
         if (!mounted) return;
         setState(() => _decorrido = DateTime.now().difference(_p.iniciadaEm!));
       });
+      unawaited(_syncWakeLock());
       return;
     }
 
@@ -148,31 +149,50 @@ class _PartidaRodandoPageState extends State<PartidaRodandoPage> {
       _decorrido = Duration.zero;
     }
 
-    _syncWakeLock();
+    unawaited(_syncWakeLock());
   }
 
-  void _syncWakeLock() {
+  Future<void> _syncWakeLock({bool force = false}) async {
     final deveManterTelaLigada = _p.isLive;
-    if (deveManterTelaLigada == _wakeLockAtivo) return;
-    _wakeLockAtivo = deveManterTelaLigada;
-    final Future<void> operacao =
-        deveManterTelaLigada ? WakelockPlus.enable() : WakelockPlus.disable();
-    operacao.catchError((_) {
+    if (!force && deveManterTelaLigada == _wakeLockAtivo) return;
+    try {
+      if (deveManterTelaLigada) {
+        await WakelockPlus.enable();
+      } else {
+        await WakelockPlus.disable();
+      }
+      final ativo = await WakelockPlus.enabled;
+      if (!mounted) return;
+      if (_wakeLockAtivo != ativo) {
+        setState(() => _wakeLockAtivo = ativo);
+      }
+      if (deveManterTelaLigada && !ativo) {
+        _avisarWakeLockNaoSuportado();
+      }
+    } catch (_) {
       if (!deveManterTelaLigada) return;
       _avisarWakeLockNaoSuportado();
-    });
+    }
   }
 
   void _avisarWakeLockNaoSuportado() {
     if (!kIsWeb || _wakeLockAvisado || !mounted) return;
     _wakeLockAvisado = true;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
+      SnackBar(
         content: Text(
-          'Seu navegador nao permite manter a tela ligada automaticamente. Mantenha a tela ativa manualmente.',
+          'Seu navegador nao permite manter a tela ligada automaticamente. Tente ativar pelo icone ou mantenha a tela ativa manualmente.',
+        ),
+        action: SnackBarAction(
+          label: 'Tentar',
+          onPressed: _solicitarWakeLockManual,
         ),
       ),
     );
+  }
+
+  Future<void> _solicitarWakeLockManual() async {
+    await _syncWakeLock(force: true);
   }
 
   String _fmt(Duration d) {
@@ -411,6 +431,12 @@ class _PartidaRodandoPageState extends State<PartidaRodandoPage> {
       appBar: AppBar(
         title: Text('${_p.timeANome}  ${_p.placarA} x ${_p.placarB}  ${_p.timeBNome}'),
         actions: [
+          if (_p.isLive && kIsWeb && !_wakeLockAtivo)
+            IconButton(
+              tooltip: 'Manter tela ligada',
+              icon: const Icon(Icons.lock_open),
+              onPressed: _solicitarWakeLockManual,
+            ),
           if (!_p.isLive && !_p.isFT)
             IconButton(
               tooltip: 'Iniciar',
