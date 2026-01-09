@@ -237,21 +237,22 @@ class _SorteioPageState extends State<SorteioPage> {
     required int votosDoSorteio,
     required int votosTotais,
     required VoidCallback onMostrarVotos,
+    bool compact = false,
   }) {
     final percent = (votosTotais > 0) ? (votosDoSorteio / votosTotais) : 0.0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: 10),
+        SizedBox(height: compact ? 6 : 10),
         ClipRRect(
           borderRadius: BorderRadius.circular(6),
           child: LinearProgressIndicator(
             value: percent.clamp(0.0, 1.0),
-            minHeight: 8,
+            minHeight: compact ? 6 : 8,
             backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
           ),
         ),
-        const SizedBox(height: 6),
+        SizedBox(height: compact ? 4 : 6),
         Row(
           children: [
             Icon(Icons.how_to_vote, size: 16, color: Colors.grey[700]),
@@ -440,10 +441,32 @@ class _SorteioPageState extends State<SorteioPage> {
   // ---------- item ----------
 
   Widget _buildSorteioItem(SorteioDetalhe sorteio) {
+    final cs = Theme.of(context).colorScheme;
     final dataFormatada = AppDate.brFromApi(sorteio.data);
     final votosEste = _votosHoje[sorteio.id] ?? 0;
+    final status = (sorteio.status ?? '').toString().toLowerCase();
+    final confirmado = _modo == 'confirmado' || status == 'confirmado';
 
-    // 👉 tocar no card SEMPRE abre os detalhes (mesmo confirmados)
+    Widget _statusBadge() {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: _statusColor(context, sorteio.status),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          _statusLabel(sorteio.status),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.4,
+          ),
+        ),
+      );
+    }
+
+    // tocar no card SEMPRE abre os detalhes (mesmo confirmados)
     Future<void> _abrirDetalhe() async {
       final detalhe = await ApiService.getSorteioDetalhe(sorteio.id);
       if (!mounted) return;
@@ -466,88 +489,134 @@ class _SorteioPageState extends State<SorteioPage> {
       borderRadius: BorderRadius.circular(16),
       onTap: _abrirDetalhe,
       child: Card(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        color: cs.surface,
+        elevation: confirmado ? 4 : 3,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: BorderSide(color: cs.primary.withOpacity(confirmado ? 0.25 : 0.15)),
+        ),
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        elevation: 4,
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // cabeçalho
               Row(
                 children: [
                   Expanded(
                     child: Text(
-                      'Sorteio nº ${sorteio.numero}',
+                      'Sorteio no ${sorteio.numero}',
                       style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                   ),
-                  if ((sorteio.status ?? '').isNotEmpty)
-                    Chip(
-                      label: Text(_statusLabel(sorteio.status)),
-                      labelStyle: const TextStyle(
-                          color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
-                      backgroundColor: _statusColor(context, sorteio.status),
-                      visualDensity: VisualDensity.compact,
-                    ),
-                  const SizedBox(width: 8),
-                  if (votosEste > 0) _votersFacepile(sorteio.id),
-                  const SizedBox(width: 8),
-                  if (votosEste > 0)
-                    Chip(
-                      label: Text('$votosEste'),
-                      visualDensity: VisualDensity.compact,
-                    ),
+                  if ((sorteio.status ?? '').isNotEmpty) _statusBadge(),
                 ],
               ),
-              const SizedBox(height: 8),
-              Text('Data: $dataFormatada'),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Icon(Icons.event, size: 16, color: cs.onSurface.withOpacity(0.6)),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Data: $dataFormatada',
+                    style: TextStyle(color: cs.onSurface.withOpacity(0.7)),
+                  ),
+                ],
+              ),
               if ((sorteio.descricao ?? '').isNotEmpty)
                 Padding(
-                  padding: const EdgeInsets.only(top: 4),
+                  padding: const EdgeInsets.only(top: 6),
                   child: Text(
                     sorteio.descricao!,
-                    style: const TextStyle(color: Colors.grey),
+                    style: TextStyle(color: cs.onSurface.withOpacity(0.6)),
                   ),
                 ),
 
-              // barra estilo "enquete"
-              _pollBar(
-                votosDoSorteio: votosEste,
-                votosTotais: _totalVotosHoje == 0 ? votosEste : _totalVotosHoje,
-                onMostrarVotos: () => _mostrarVotantesDeSorteio(sorteio.id),
-              ),
-
-              // rodapé de ações do card (apenas quando confirmado)
-              if (_modo == 'confirmado') ...[
-                const SizedBox(height: 8),
+              SizedBox(height: confirmado ? 8 : 12),
+              if (votosEste > 0)
                 Row(
                   children: [
-                    const Spacer(),
-                    FilledButton.icon(
-                      icon: const Icon(Icons.sports_soccer),
-                      label: const Text('Registrar partidas'),
-                      onPressed: () async {
-                        final detalhe = await ApiService.getSorteioDetalhe(sorteio.id);
-                        if (!mounted) return;
-                        await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => RegistrarPartidasPage(sorteio: detalhe),
-                          ),
-                        );
-                        await _carregarTudo();
-                      },
+                    _votersFacepile(sorteio.id),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: cs.primary.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        '$votosEste votos',
+                        style: TextStyle(
+                          color: cs.primary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ),
                   ],
                 ),
+              SizedBox(height: confirmado ? 6 : 8),
+              Container(
+                padding: EdgeInsets.all(confirmado ? 8 : 12),
+                decoration: BoxDecoration(
+                  color: cs.surfaceVariant.withOpacity(0.55),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: cs.primary.withOpacity(0.12)),
+                ),
+                child: _pollBar(
+                  votosDoSorteio: votosEste,
+                  votosTotais: _totalVotosHoje == 0 ? votosEste : _totalVotosHoje,
+                  onMostrarVotos: () => _mostrarVotantesDeSorteio(sorteio.id),
+                  compact: confirmado,
+                ),
+              ),
+
+              if (confirmado) ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Icon(Icons.sports_soccer, color: cs.primary, size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Pronto para registrar partidas',
+                      style: TextStyle(
+                        color: cs.onSurface.withOpacity(0.75),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                FilledButton.icon(
+                  icon: const Icon(Icons.sports_soccer),
+                  label: const Text('Registrar partidas'),
+                  onPressed: () async {
+                    final detalhe = await ApiService.getSorteioDetalhe(sorteio.id);
+                    if (!mounted) return;
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => RegistrarPartidasPage(sorteio: detalhe),
+                      ),
+                    );
+                    await _carregarTudo();
+                  },
+                ),
               ],
 
-              const SizedBox(height: 4),
-              const Align(
-                alignment: Alignment.bottomRight,
-                child: Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+              const SizedBox(height: 6),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Text(
+                    'Ver detalhes',
+                    style: TextStyle(
+                      color: cs.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Icon(Icons.arrow_forward_ios, size: 14, color: cs.primary),
+                ],
               ),
             ],
           ),
@@ -689,4 +758,5 @@ class _SorteioPageState extends State<SorteioPage> {
     );
   }
 }
+
 
