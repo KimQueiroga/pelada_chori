@@ -53,7 +53,9 @@ class Partida {
     if (v == null) return null;
     if (v is DateTime) return v;
     if (v is String && v.trim().isNotEmpty) {
-      return DateTime.tryParse(v);
+      final parsed = DateTime.tryParse(v);
+      if (parsed == null) return null;
+      return parsed.isUtc ? parsed.toLocal() : parsed;
     }
     return null;
   }

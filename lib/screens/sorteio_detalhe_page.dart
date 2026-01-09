@@ -133,8 +133,8 @@ class _SorteioDetalhePageState extends State<SorteioDetalhePage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Sorteio nº ${sorteio.numero}'),
-            Text(
-              'Data: ${DateFormat('dd/MM/yyyy').format(DateTime.parse(sorteio.data))}',
+              Text(
+                'Data: ${DateFormat('dd/MM/yyyy').format(DateTime.parse(sorteio.data).toLocal())}',
               // usa a cor “onPrimary” do appbar atual (fica ok no light/dark)
               style: theme.textTheme.bodySmall?.copyWith(
                 color: cs.onPrimary.withOpacity(0.72),
