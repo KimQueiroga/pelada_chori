@@ -158,6 +158,48 @@ class ApiService {
     return (modo: modo, sorteios: sorteios, votosPorId: votos);
   }
 
+  static Future<({
+    String mesReferencia,
+    List<Map<String, dynamic>> vitorias,
+    List<Map<String, dynamic>> gols,
+    List<Map<String, dynamic>> assistencias,
+  })> getDestaquesDoMes({DateTime? data, int limite = 5}) async {
+    var safeLimite = limite;
+    if (safeLimite < 1) safeLimite = 1;
+    if (safeLimite > 20) safeLimite = 20;
+    final params = <String, String>{
+      'limite': safeLimite.toString(),
+    };
+    if (data != null) {
+      params['data'] = _ymd(data);
+    }
+
+    final uri = Uri.parse('${ApiConfig.baseUrl}/destaques/mes')
+        .replace(queryParameters: params);
+    final resp = await _getWithAuth(uri);
+
+    if (resp.statusCode != 200) {
+      throw Exception('Erro ao carregar destaques: ${resp.body}');
+    }
+
+    final body = jsonDecode(resp.body) as Map<String, dynamic>;
+    final top5 = (body['top5'] as Map?)?.cast<String, dynamic>() ?? const {};
+
+    List<Map<String, dynamic>> listFrom(String key) {
+      final raw = (top5[key] as List?) ?? const [];
+      return raw
+          .map<Map<String, dynamic>>((e) => (e as Map).cast<String, dynamic>())
+          .toList();
+    }
+
+    return (
+      mesReferencia: (body['mes_referencia'] ?? '').toString(),
+      vitorias: listFrom('vitorias'),
+      gols: listFrom('gols'),
+      assistencias: listFrom('assistencias'),
+    );
+  }
+
   /// Publica a dupla mais recente do dia para votação
   static Future<void> publicarDupla(DateTime data) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/sorteios/publicar');
