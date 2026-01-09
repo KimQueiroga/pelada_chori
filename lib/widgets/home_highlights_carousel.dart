@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:pelada_chori/services/api_service.dart';
 
@@ -21,14 +23,35 @@ class _HomeHighlightsCarouselState extends State<HomeHighlightsCarousel> {
   List<StatEntry> _vitorias = const [];
   List<StatEntry> _gols = const [];
   List<StatEntry> _assist = const [];
+  bool _fetching = false;
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
-    _carregarDestaques();
+    _carregarDestaques(showLoading: true);
+    _refreshTimer = Timer.periodic(
+      const Duration(minutes: 30),
+      (_) => _carregarDestaques(),
+    );
   }
 
-  Future<void> _carregarDestaques() async {
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _carregarDestaques({bool showLoading = false}) async {
+    if (_fetching) return;
+    _fetching = true;
+    if (showLoading && mounted) {
+      setState(() {
+        _loading = true;
+        _erro = null;
+      });
+    }
+
     try {
       final resp = await ApiService.getDestaquesDoMes();
       if (!mounted) return;
@@ -40,11 +63,22 @@ class _HomeHighlightsCarouselState extends State<HomeHighlightsCarousel> {
         _erro = null;
       });
     } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _erro = 'Erro ao carregar destaques.';
-      });
+      if (mounted) {
+        final hasData =
+            _vitorias.isNotEmpty || _gols.isNotEmpty || _assist.isNotEmpty;
+        if (showLoading || !hasData) {
+          setState(() {
+            _loading = false;
+            _erro = 'Erro ao carregar destaques.';
+          });
+        } else {
+          setState(() {
+            _loading = false;
+          });
+        }
+      }
+    } finally {
+      _fetching = false;
     }
   }
 
@@ -112,7 +146,7 @@ class _HomeHighlightsCarouselState extends State<HomeHighlightsCarousel> {
                   ),
                   const SizedBox(height: 8),
                   TextButton(
-                    onPressed: _carregarDestaques,
+                    onPressed: () => _carregarDestaques(showLoading: true),
                     child: const Text('Tentar novamente'),
                   ),
                 ],
