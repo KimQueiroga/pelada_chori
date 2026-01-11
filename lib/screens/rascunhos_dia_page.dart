@@ -186,13 +186,13 @@ class _RascunhosDiaPageState extends State<RascunhosDiaPage> {
         : (j.nome ?? 'Jogador');
     final pos = _posShort(j.posicao);
     final posTxt = pos.isNotEmpty ? ' ($pos)' : '';
-    return '• $numero – $nome$posTxt';
+    return '- $numero - $nome$posTxt';
   }
 
   String _formatTimeBonito(SorteioTime t) {
     final buffer = StringBuffer();
     final media = _fmtNum(t.mediaCalculada ?? t.media); // compat com seu modelo
-    buffer.writeln('${_bold(t.nome ?? 'Time')} (média $media)');
+    buffer.writeln('${_bold(t.nome ?? 'Time')} (media $media)');
     for (final j in t.jogadores) {
       buffer.writeln(_formatJogadorLinhaBonito(j));
     }
@@ -201,11 +201,13 @@ class _RascunhosDiaPageState extends State<RascunhosDiaPage> {
 
   String _formatSorteioBonito(SorteioDetalhe s) {
     final buffer = StringBuffer();
-    buffer.writeln('${_bold('Sorteio nº ${s.numero} • ${AppDate.brFromApi(s.data)}')}');
-    if ((s.descricao ?? '').isNotEmpty) buffer.writeln(s.descricao!.trim());
-    for (final t in s.times) {
-      buffer.writeln();
-      buffer.writeln(_formatTimeBonito(t));
+    buffer.writeln(_bold('Sorteio ${s.numero} - ${AppDate.brFromApi(s.data)}'));
+    if ((s.descricao ?? '').isNotEmpty) {
+      buffer.writeln('Descricao: ${s.descricao!.trim()}');
+    }
+    for (var i = 0; i < s.times.length; i++) {
+      buffer.writeln(_formatTimeBonito(s.times[i]));
+      if (i != s.times.length - 1) buffer.writeln();
     }
     return buffer.toString().trimRight();
   }
@@ -216,14 +218,20 @@ class _RascunhosDiaPageState extends State<RascunhosDiaPage> {
     final data = AppDate.brFromApi(par.first.data);
 
     final buffer = StringBuffer();
-    buffer.writeln(_bold('Pelada Chori — Tentativa $tentativa ($data)'));
-    for (final s in par) {
-      buffer.writeln();
-      buffer.writeln(_formatSorteioBonito(s));
+    buffer.writeln(_bold('Pelada Chori'));
+    buffer.writeln('Tentativa $tentativa - $data');
+    buffer.writeln();
+    for (var i = 0; i < par.length; i++) {
+      buffer.writeln(_formatSorteioBonito(par[i]));
+      if (i != par.length - 1) {
+        buffer.writeln();
+        buffer.writeln('----');
+        buffer.writeln();
+      }
     }
     buffer.writeln();
-    buffer.write('— enviado pelo app Pelada Chori');
-    return buffer.toString();
+    buffer.write('Enviado pelo app Pelada Chori');
+    return buffer.toString().trimRight();
   }
 
   Future<void> _shareTentativa(List<SorteioDetalhe> par) async {
@@ -239,6 +247,100 @@ class _RascunhosDiaPageState extends State<RascunhosDiaPage> {
   }
 
   // ---------- UI ----------
+
+  Widget _buildEmptyState(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return RefreshIndicator(
+      onRefresh: _carregar,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(24, 80, 24, 120),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceVariant.withOpacity(0.4),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: theme.colorScheme.outlineVariant),
+            ),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.inbox_outlined,
+                  size: 56,
+                  color: theme.colorScheme.primary,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Sem rascunhos hoje',
+                  style: theme.textTheme.titleMedium,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Quando houver novas tentativas, elas vao aparecer aqui.',
+                  style: theme.textTheme.bodyMedium,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                OutlinedButton.icon(
+                  onPressed: _carregar,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Atualizar'),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _statusPill(ThemeData theme, {required bool completa}) {
+    final baseColor = completa ? Colors.green[700] : Colors.orange[700];
+    final color = baseColor ?? theme.colorScheme.primary;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withOpacity(0.35)),
+      ),
+      child: Text(
+        completa ? 'Par completo' : 'Incompleto',
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: color,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  Widget _metaPill(ThemeData theme, String text, {IconData? icon}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceVariant.withOpacity(0.4),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 14, color: theme.colorScheme.primary),
+            const SizedBox(width: 6),
+          ],
+          Text(
+            text,
+            style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -261,62 +363,95 @@ class _RascunhosDiaPageState extends State<RascunhosDiaPage> {
           ? const Center(child: CircularProgressIndicator())
           : _erro != null
               ? Center(child: Text(_erro!))
+              : _pares.isEmpty
+                  ? _buildEmptyState(context)
               : RefreshIndicator(
                   onRefresh: _carregar,
                   child: ListView.separated(
-                    padding: const EdgeInsets.only(top: 8, bottom: 100),
+                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 100),
                     itemCount: _pares.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    separatorBuilder: (_, __) => const SizedBox(height: 12),
                     itemBuilder: (context, index) {
                       final par = _pares[index];
                       final tentativa = par.isNotEmpty ? par.first.tentativa : null;
                       final completa = par.length == 2;
+                      final selecionada = tentativa != null &&
+                          tentativa == _tentativaSelecionada;
+                      final dataTentativa =
+                          par.isNotEmpty ? AppDate.brFromApi(par.first.data) : '';
 
                       return Card(
-                        margin: const EdgeInsets.symmetric(horizontal: 12),
+                        margin: EdgeInsets.zero,
+                        elevation: selecionada ? 2 : 1,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(14),
+                          side: BorderSide(
+                            color: selecionada
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.outlineVariant,
+                          ),
                         ),
                         child: Padding(
-                          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                          padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               // Cabeçalho (radio + “Tentativa X” + status + share tentativa)
-                              Row(
-                                children: [
-                                  Radio<int>(
-                                    value: tentativa ?? -1,
-                                    groupValue: _tentativaSelecionada,
-                                    onChanged: completa
-                                        ? (v) =>
-                                            setState(() => _tentativaSelecionada = v)
-                                        : null,
+                              InkWell(
+                                onTap: completa
+                                    ? () => setState(
+                                        () => _tentativaSelecionada = tentativa)
+                                    : null,
+                                borderRadius: BorderRadius.circular(10),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 4),
+                                  child: Row(
+                                    children: [
+                                      Radio<int>(
+                                        value: tentativa ?? -1,
+                                        groupValue: _tentativaSelecionada,
+                                        onChanged: completa
+                                            ? (v) => setState(
+                                                () => _tentativaSelecionada = v)
+                                            : null,
+                                        visualDensity: VisualDensity.compact,
+                                        materialTapTargetSize:
+                                            MaterialTapTargetSize.shrinkWrap,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              'Tentativa ${tentativa ?? '-'}',
+                                              style: theme.textTheme.titleMedium,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                            if (dataTentativa.isNotEmpty)
+                                              Text(
+                                                'Data: $dataTentativa',
+                                                style: theme.textTheme.bodySmall,
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      _statusPill(theme, completa: completa),
+                                      const SizedBox(width: 4),
+                                      IconButton(
+                                        tooltip: 'Compartilhar tentativa',
+                                        onPressed: par.isNotEmpty
+                                            ? () => _shareTentativa(par)
+                                            : null,
+                                        icon: const Icon(Icons.share),
+                                      ),
+                                    ],
                                   ),
-                                  const SizedBox(width: 4),
-                                  Expanded(
-                                    child: Text(
-                                      'Tentativa ${tentativa ?? '-'}',
-                                      style: theme.textTheme.titleMedium,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Chip(
-                                    label: Text(completa ? 'Par completo' : 'Incompleto'),
-                                    visualDensity: VisualDensity.compact,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  IconButton(
-                                    tooltip: 'Compartilhar tentativa',
-                                    onPressed: par.isNotEmpty
-                                        ? () => _shareTentativa(par)
-                                        : null,
-                                    icon: const Icon(Icons.share),
-                                  ),
-                                ],
+                                ),
                               ),
-                              const SizedBox(height: 6),
+                              const SizedBox(height: 8),
 
                               // Cartões dos sorteios desta tentativa (1 e 2)
                               ...par
@@ -353,11 +488,15 @@ class _RascunhosDiaPageState extends State<RascunhosDiaPage> {
   /// Card com *um sorteio* (título + data + times e jogadores) + botão compartilhar sorteio.
   Widget _cardSorteio(SorteioDetalhe s) {
     final theme = Theme.of(context);
+    final dataTxt = AppDate.brFromApi(s.data);
 
     return Card(
-      color: theme.colorScheme.surfaceVariant.withOpacity(.5),
+      color: theme.colorScheme.surfaceVariant.withOpacity(0.35),
       elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: theme.colorScheme.outlineVariant),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
@@ -368,16 +507,13 @@ class _RascunhosDiaPageState extends State<RascunhosDiaPage> {
               children: [
                 Expanded(
                   child: Text(
-                    'Rascunho • Sorteio nº ${s.numero}',
+                    'Sorteio ${s.numero}',
                     style: theme.textTheme.titleMedium,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  AppDate.brFromApi(s.data),
-                  style: theme.textTheme.bodySmall,
-                ),
+                _metaPill(theme, dataTxt, icon: Icons.event),
                 IconButton(
                   tooltip: 'Compartilhar sorteio',
                   onPressed: () => _shareSorteio(s),
@@ -387,83 +523,104 @@ class _RascunhosDiaPageState extends State<RascunhosDiaPage> {
             ),
 
             if ((s.descricao ?? '').isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Text(
-                s.descricao!,
-                style: theme.textTheme.bodySmall,
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surface,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: theme.colorScheme.outlineVariant),
+                ),
+                child: Text(
+                  s.descricao!,
+                  style: theme.textTheme.bodySmall,
+                ),
               ),
             ],
 
             const SizedBox(height: 10),
 
             // Times e jogadores
-            ...s.times.map((t) {
+            ...s.times.asMap().entries.map((entry) {
+              final t = entry.value;
+              final isLast = entry.key == s.times.length - 1;
               final mediaTxt = _fmtNum(t.mediaCalculada ?? t.media);
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          t.nome ?? 'Time',
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      Container(
-                        padding:
-                            const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(10),
-                          color: theme.colorScheme.surface,
-                          border: Border.all(
-                            color: theme.colorScheme.outlineVariant,
-                          ),
-                        ),
-                        child: Text(
-                          'Média $mediaTxt',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
+              return Padding(
+                padding: EdgeInsets.only(bottom: isLast ? 0 : 10),
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surface,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: theme.colorScheme.outlineVariant),
                   ),
-                  const SizedBox(height: 6),
-                  ...t.jogadores.map((j) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
                         children: [
-                          CircleAvatar(
-                            radius: 14,
-                            backgroundImage: (j.foto != null && j.foto!.isNotEmpty)
-                                ? NetworkImage(j.foto!)
-                                : null,
-                            child: (j.foto == null || j.foto!.isEmpty)
-                                ? const Icon(Icons.person, size: 16)
-                                : null,
-                          ),
-                          const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              '${_pad2(j.numeroCamisa)} - ${j.apelido ?? j.nome ?? "Jogador"}',
-                              overflow: TextOverflow.ellipsis,
+                              t.nome ?? 'Time',
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          Text(
-                            _posShort(j.posicao),
-                            style: const TextStyle(color: Colors.grey),
-                          ),
+                          _metaPill(theme, 'Media $mediaTxt',
+                              icon: Icons.bar_chart),
                         ],
                       ),
-                    );
-                  }),
-                  const SizedBox(height: 8),
-                ],
+                      const SizedBox(height: 6),
+                      ...t.jogadores.map((j) {
+                        final pos = _posShort(j.posicao);
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 14,
+                                backgroundImage: (j.foto != null &&
+                                        j.foto!.isNotEmpty)
+                                    ? NetworkImage(j.foto!)
+                                    : null,
+                                child: (j.foto == null || j.foto!.isEmpty)
+                                    ? const Icon(Icons.person, size: 16)
+                                    : null,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  '${_pad2(j.numeroCamisa)} - ${j.apelido ?? j.nome ?? "Jogador"}',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (pos.isNotEmpty) ...[
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: theme.colorScheme.surfaceVariant
+                                        .withOpacity(0.5),
+                                    borderRadius: BorderRadius.circular(999),
+                                    border: Border.all(
+                                      color: theme.colorScheme.outlineVariant,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    pos,
+                                    style: theme.textTheme.bodySmall,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
+                ),
               );
             }),
           ],

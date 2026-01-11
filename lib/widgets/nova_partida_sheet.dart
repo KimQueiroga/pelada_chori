@@ -64,8 +64,70 @@ class _NovaPartidaSheetState extends State<NovaPartidaSheet> {
     }
   }
 
+  InputDecoration _fieldDecoration(ThemeData theme, String label) {
+    return InputDecoration(
+      labelText: label,
+      filled: true,
+      fillColor: theme.colorScheme.surfaceVariant.withOpacity(0.25),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+    );
+  }
+
+  String _timeLabel(Map<String, dynamic> time) {
+    final nome = (time['nome'] ?? 'Time').toString();
+    final jogadores = (time['jogadores'] as List?) ?? const [];
+    final apelidos = jogadores
+        .map((j) {
+          final map = (j as Map).cast<String, dynamic>();
+          final jogador = (map['jogador'] as Map?)?.cast<String, dynamic>();
+          return (map['apelido'] ??
+                  map['nome'] ??
+                  jogador?['apelido'] ??
+                  jogador?['nome'] ??
+                  '')
+              .toString()
+              .trim();
+        })
+        .where((s) => s.isNotEmpty)
+        .toList();
+    if (apelidos.isEmpty) return nome;
+    const maxApelidos = 3;
+    final base = apelidos.take(maxApelidos).join(', ');
+    final suffix = apelidos.length > maxApelidos ? ', ...' : '';
+    return '$nome - $base$suffix';
+  }
+
+  Widget _buildTimeDropdown({
+    required ThemeData theme,
+    required String label,
+    required int? value,
+    required ValueChanged<int?> onChanged,
+  }) {
+    return DropdownButtonFormField<int>(
+      value: value,
+      isExpanded: true,
+      items: _times
+          .map(
+            (t) => DropdownMenuItem<int>(
+              value: t['id'] as int,
+              child: Text(
+                _timeLabel(t),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          )
+          .toList(),
+      onChanged: onChanged,
+      decoration: _fieldDecoration(theme, label),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return SafeArea(
       child: Padding(
         padding: EdgeInsets.only(
@@ -75,45 +137,76 @@ class _NovaPartidaSheetState extends State<NovaPartidaSheet> {
         ),
         child: _loading
             ? const Center(child: CircularProgressIndicator())
-            : Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('Nova Partida', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<int>(
-                    value: _timeAId,
-                    items: _times.map((t) => DropdownMenuItem<int>(
-                      value: t['id'] as int, child: Text(t['nome']?.toString() ?? 'Time'))).toList(),
-                    onChanged: (v) => setState(() => _timeAId = v),
-                    decoration: const InputDecoration(labelText: 'Time A'),
-                  ),
-                  const SizedBox(height: 10),
-                  DropdownButtonFormField<int>(
-                    value: _timeBId,
-                    items: _times.map((t) => DropdownMenuItem<int>(
-                      value: t['id'] as int, child: Text(t['nome']?.toString() ?? 'Time'))).toList(),
-                    onChanged: (v) => setState(() => _timeBId = v),
-                    decoration: const InputDecoration(labelText: 'Time B'),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      const Text('Tempo (min):'),
-                      const SizedBox(width: 8),
-                      DropdownButton<int>(
-                        value: _tempoMin,
-                        items: const [5,7,10,12].map((m)=>DropdownMenuItem(value: m, child: Text('$m'))).toList(),
-                        onChanged: (v) => setState(() => _tempoMin = v ?? 7),
+            : SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 48,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.outlineVariant,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
                       ),
-                      const Spacer(),
-                      FilledButton.icon(
-                        onPressed: _salvar,
-                        icon: const Icon(Icons.check),
-                        label: const Text('Criar'),
-                      )
-                    ],
-                  ),
-                ],
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Nova Partida',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Escolha os times e o tempo de jogo.',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 16),
+                    _buildTimeDropdown(
+                      theme: theme,
+                      label: 'Time A',
+                      value: _timeAId,
+                      onChanged: (v) => setState(() => _timeAId = v),
+                    ),
+                    const SizedBox(height: 10),
+                    _buildTimeDropdown(
+                      theme: theme,
+                      label: 'Time B',
+                      value: _timeBId,
+                      onChanged: (v) => setState(() => _timeBId = v),
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<int>(
+                      value: _tempoMin,
+                      isExpanded: true,
+                      items: const [5, 7, 10, 12]
+                          .map((m) => DropdownMenuItem(value: m, child: Text('$m')))
+                          .toList(),
+                      onChanged: (v) => setState(() => _tempoMin = v ?? 7),
+                      decoration: _fieldDecoration(theme, 'Tempo (min)'),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('Cancelar'),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: FilledButton.icon(
+                            onPressed: _salvar,
+                            icon: const Icon(Icons.check),
+                            label: const Text('Criar partida'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
       ),
     );

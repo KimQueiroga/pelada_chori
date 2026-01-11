@@ -43,6 +43,7 @@ class _PartidaRodandoPageState extends State<PartidaRodandoPage> {
   bool _acaoSubstituicao = false;
   bool _wakeLockAtivo = false;
   bool _wakeLockAvisado = false;
+  bool _golSplashVisible = false;
 
   @override
   void initState() {
@@ -276,6 +277,24 @@ class _PartidaRodandoPageState extends State<PartidaRodandoPage> {
     return '$m:$s';
   }
 
+  String _tempoTexto() {
+    if (_p.isLive) return _fmt(_decorrido);
+    if (_p.isFT) return 'FT ${_fmt(_decorrido)}';
+    return '00:00';
+  }
+
+  String _statusLabel() {
+    if (_p.isLive) return 'LIVE';
+    if (_p.isFT) return 'ENCERRADA';
+    return 'AGUARDANDO';
+  }
+
+  Color _statusColor(ColorScheme cs) {
+    if (_p.isLive) return cs.primary;
+    if (_p.isFT) return cs.secondary;
+    return cs.outline;
+  }
+
   // ---------------- ações ----------------
   Future<void> _iniciar() async {
     setState(() => _acao = true);
@@ -405,6 +424,8 @@ class _PartidaRodandoPageState extends State<PartidaRodandoPage> {
 
             final podeConfirmar =
                 timeId != null && jogadorSaiId != null && jogadorEntraId != null;
+            final theme = Theme.of(ctx);
+            final cs = theme.colorScheme;
 
             return Padding(
               padding: EdgeInsets.only(
@@ -416,12 +437,27 @@ class _PartidaRodandoPageState extends State<PartidaRodandoPage> {
               child: ListView(
                 controller: scrollController,
                 children: [
+                  Center(
+                    child: Container(
+                      width: 48,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: cs.outlineVariant,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
                   Row(
                     children: [
-                      const Expanded(
+                      Icon(Icons.swap_horiz, color: cs.primary),
+                      const SizedBox(width: 8),
+                      Expanded(
                         child: Text(
                           'Substituicoes',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
                       IconButton(
@@ -431,106 +467,391 @@ class _PartidaRodandoPageState extends State<PartidaRodandoPage> {
                       ),
                     ],
                   ),
-                  if (_substituicoes.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    const Text('Ativas', style: TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 6),
-                    ..._substituicoes.map((s) {
-                      final timeNome = (s['time_id'] == _p.timeAId)
-                          ? _p.timeANome
-                          : _p.timeBNome;
-                      final sai = _nomeJogador((s['jogador_sai'] as Map?)?.cast<String, dynamic>());
-                      final entra = _nomeJogador((s['jogador_entra'] as Map?)?.cast<String, dynamic>());
-                      return Card(
-                        child: ListTile(
-                          title: Text('$sai -> $entra'),
-                          subtitle: Text(timeNome),
-                          trailing: TextButton(
-                            onPressed: _acaoSubstituicao
-                                ? null
-                                : () async {
-                                    Navigator.pop(ctx);
-                                    await _desfazerSubstituicao(s['id'] as int);
-                                  },
-                            child: const Text('Desfazer'),
-                          ),
-                        ),
-                      );
-                    }),
-                    const Divider(height: 24),
-                  ],
-                  const Text('Nova substituicao', style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  DropdownButtonFormField<int>(
-                    value: timeId,
-                    items: [
-                      DropdownMenuItem(
-                        value: _p.timeAId,
-                        child: Text(_p.timeANome),
-                      ),
-                      DropdownMenuItem(
-                        value: _p.timeBId,
-                        child: Text(_p.timeBNome),
-                      ),
-                    ],
-                    onChanged: (v) => setSB(() => timeId = v),
-                    decoration: const InputDecoration(labelText: 'Time'),
+                  Text(
+                    'Troque jogadores durante a partida.',
+                    style: theme.textTheme.bodySmall,
                   ),
                   const SizedBox(height: 12),
-                  const Text('Jogador que sai', style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 6),
-                  ...jogadoresDoTime.map((p) {
-                    final jid = p['jogador_id'] as int;
-                    return RadioListTile<int>(
-                      value: jid,
-                      groupValue: jogadorSaiId,
-                      onChanged: (v) => setSB(() => jogadorSaiId = v),
-                      title: Row(
-                        children: [
-                          _avatar(p),
-                          const SizedBox(width: 8),
-                          Expanded(child: Text(_nomeJogadorPj(p))),
-                        ],
+                  if (_substituicoes.isNotEmpty) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: cs.surfaceVariant.withOpacity(0.25),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: cs.outlineVariant),
                       ),
-                    );
-                  }),
-                  const SizedBox(height: 8),
-                  const Text('Jogador que entra (fora da partida)',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 6),
-                  if (disponiveis.isEmpty)
-                    const Text('Nenhum jogador disponivel.'),
-                  ...disponiveis.map((p) {
-                    final timeNome = (p['time_nome'] ?? '').toString();
-                    return RadioListTile<int>(
-                      value: p['jogador_id'] as int,
-                      groupValue: jogadorEntraId,
-                      onChanged: (v) => setSB(() => jogadorEntraId = v),
-                      title: Row(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _avatar(p),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text('${_nomeJogadorPj(p)}${timeNome.isEmpty ? '' : ' - $timeNome'}'),
+                          Text(
+                            'Ativas',
+                            style: theme.textTheme.labelLarge?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
+                          const SizedBox(height: 8),
+                          ..._substituicoes.map((s) {
+                            final timeNome = (s['time_id'] == _p.timeAId)
+                                ? _p.timeANome
+                                : _p.timeBNome;
+                            final sai = _nomeJogador(
+                              (s['jogador_sai'] as Map?)?.cast<String, dynamic>(),
+                            );
+                            final entra = _nomeJogador(
+                              (s['jogador_entra'] as Map?)?.cast<String, dynamic>(),
+                            );
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              decoration: BoxDecoration(
+                                color: cs.surface,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: cs.outlineVariant),
+                              ),
+                              child: ListTile(
+                                contentPadding:
+                                    const EdgeInsets.symmetric(horizontal: 10),
+                                title: Text('$sai -> $entra'),
+                                subtitle: Text(timeNome),
+                                trailing: TextButton(
+                                  onPressed: _acaoSubstituicao
+                                      ? null
+                                      : () async {
+                                          Navigator.pop(ctx);
+                                          await _desfazerSubstituicao(s['id'] as int);
+                                        },
+                                  child: const Text('Desfazer'),
+                                ),
+                              ),
+                            );
+                          }),
                         ],
                       ),
-                    );
-                  }),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: cs.surfaceVariant.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: cs.outlineVariant),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.loop, size: 18, color: cs.primary),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Nova substituicao',
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        DropdownButtonFormField<int>(
+                          value: timeId,
+                          items: [
+                            DropdownMenuItem(
+                              value: _p.timeAId,
+                              child: Text(_p.timeANome),
+                            ),
+                            DropdownMenuItem(
+                              value: _p.timeBId,
+                              child: Text(_p.timeBNome),
+                            ),
+                          ],
+                          onChanged: (v) => setSB(() => timeId = v),
+                          decoration: InputDecoration(
+                            labelText: 'Time',
+                            filled: true,
+                            fillColor: cs.surface.withOpacity(0.8),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Jogador que sai',
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        ...jogadoresDoTime.map((p) {
+                          final jid = p['jogador_id'] as int;
+                          final selected = jogadorSaiId == jid;
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 6),
+                            decoration: BoxDecoration(
+                              color: selected
+                                  ? cs.primary.withOpacity(0.08)
+                                  : cs.surface.withOpacity(0.9),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: selected
+                                    ? cs.primary.withOpacity(0.35)
+                                    : cs.outlineVariant,
+                              ),
+                            ),
+                            child: RadioListTile<int>(
+                              value: jid,
+                              groupValue: jogadorSaiId,
+                              onChanged: (v) => setSB(() => jogadorSaiId = v),
+                              dense: true,
+                              visualDensity: VisualDensity.compact,
+                              contentPadding:
+                                  const EdgeInsets.symmetric(horizontal: 8),
+                              title: Row(
+                                children: [
+                                  _avatar(p),
+                                  const SizedBox(width: 8),
+                                  Expanded(child: Text(_nomeJogadorPj(p))),
+                                ],
+                              ),
+                            ),
+                          );
+                        }),
+                        const SizedBox(height: 10),
+                        Text(
+                          'Jogador que entra (fora da partida)',
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        if (disponiveis.isEmpty)
+                          Text(
+                            'Nenhum jogador disponivel.',
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        ...disponiveis.map((p) {
+                          final timeNome = (p['time_nome'] ?? '').toString();
+                          final jid = p['jogador_id'] as int;
+                          final selected = jogadorEntraId == jid;
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 6),
+                            decoration: BoxDecoration(
+                              color: selected
+                                  ? cs.primary.withOpacity(0.08)
+                                  : cs.surface.withOpacity(0.9),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: selected
+                                    ? cs.primary.withOpacity(0.35)
+                                    : cs.outlineVariant,
+                              ),
+                            ),
+                            child: RadioListTile<int>(
+                              value: jid,
+                              groupValue: jogadorEntraId,
+                              onChanged: (v) => setSB(() => jogadorEntraId = v),
+                              dense: true,
+                              visualDensity: VisualDensity.compact,
+                              contentPadding:
+                                  const EdgeInsets.symmetric(horizontal: 8),
+                              title: Row(
+                                children: [
+                                  _avatar(p),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      '${_nomeJogadorPj(p)}${timeNome.isEmpty ? '' : ' - $timeNome'}',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
+                  ),
                   const SizedBox(height: 12),
-                  FilledButton.icon(
-                    onPressed: (_acaoSubstituicao || !podeConfirmar)
-                        ? null
-                        : () async {
-                            Navigator.pop(ctx);
-                            await _registrarSubstituicao(
-                              timeId: timeId!,
-                              jogadorSaiId: jogadorSaiId!,
-                              jogadorEntraId: jogadorEntraId!,
-                            );
-                          },
-                    icon: const Icon(Icons.swap_horiz),
-                    label: const Text('Confirmar substituicao'),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: (_acaoSubstituicao || !podeConfirmar)
+                          ? null
+                          : () async {
+                              Navigator.pop(ctx);
+                              await _registrarSubstituicao(
+                                timeId: timeId!,
+                                jogadorSaiId: jogadorSaiId!,
+                                jogadorEntraId: jogadorEntraId!,
+                              );
+                            },
+                      icon: const Icon(Icons.swap_horiz),
+                      label: const Text('Confirmar substituicao'),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          });
+        },
+      ),
+    );
+  }
+
+  Future<void> _abrirSubstituicaoRapida({
+    required Map<String, dynamic> jogadorSai,
+    required int timeId,
+    required String timeNome,
+  }) async {
+    if (!_p.isLive || _acaoSubstituicao) return;
+
+    int? jogadorEntraId;
+    final jogadorSaiId = jogadorSai['jogador_id'] as int;
+    final jogadorSaiNome = _nomeJogadorPj(jogadorSai);
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.72,
+        builder: (ctx, scrollController) {
+          return StatefulBuilder(builder: (ctx, setSB) {
+            final ativosIds = <int>{
+              for (final p in _playersA) (p['jogador_id'] as int),
+              for (final p in _playersB) (p['jogador_id'] as int),
+            };
+
+            final disponiveis = _todosJogadores
+                .where((p) => !ativosIds.contains(p['jogador_id'] as int))
+                .toList();
+
+            if (jogadorEntraId != null &&
+                !disponiveis.any((p) => p['jogador_id'] == jogadorEntraId)) {
+              jogadorEntraId = null;
+            }
+
+            final podeConfirmar = jogadorEntraId != null;
+            final theme = Theme.of(ctx);
+            final cs = theme.colorScheme;
+
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 16,
+                right: 16,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
+                top: 12,
+              ),
+              child: Column(
+                children: [
+                  Center(
+                    child: Container(
+                      width: 48,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: cs.outlineVariant,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      const Icon(Icons.swap_horiz),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Substituir $jogadorSaiNome',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Fechar',
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Time: $timeNome',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Expanded(
+                    child: disponiveis.isEmpty
+                        ? Center(
+                            child: Text(
+                              'Nenhum jogador disponivel.',
+                              style: theme.textTheme.bodySmall,
+                            ),
+                          )
+                        : ListView.separated(
+                            controller: scrollController,
+                            itemCount: disponiveis.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 6),
+                            itemBuilder: (context, index) {
+                              final p = disponiveis[index];
+                              final jid = p['jogador_id'] as int;
+                              final selected = jogadorEntraId == jid;
+                              final timeTxt = (p['time_nome'] ?? '').toString();
+                              return Container(
+                                decoration: BoxDecoration(
+                                  color: selected
+                                      ? cs.primary.withOpacity(0.08)
+                                      : cs.surfaceVariant.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: selected
+                                        ? cs.primary.withOpacity(0.35)
+                                        : cs.outlineVariant,
+                                  ),
+                                ),
+                                child: ListTile(
+                                  onTap: () => setSB(() => jogadorEntraId = jid),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 4,
+                                  ),
+                                  leading: _avatar(p),
+                                  title: Text(
+                                    _nomeJogadorPj(p),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  subtitle: timeTxt.isEmpty ? null : Text(timeTxt),
+                                  trailing: selected
+                                      ? Icon(Icons.check_circle,
+                                          color: cs.primary)
+                                      : const Icon(Icons.circle_outlined,
+                                          size: 18),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: _acaoSubstituicao || !podeConfirmar
+                          ? null
+                          : () async {
+                              Navigator.pop(ctx);
+                              await _registrarSubstituicao(
+                                timeId: timeId,
+                                jogadorSaiId: jogadorSaiId,
+                                jogadorEntraId: jogadorEntraId!,
+                              );
+                            },
+                      icon: const Icon(Icons.swap_horiz),
+                      label: const Text('Confirmar substituicao'),
+                    ),
                   ),
                 ],
               ),
@@ -543,6 +864,7 @@ class _PartidaRodandoPageState extends State<PartidaRodandoPage> {
 
   // ---------------- registrar gol via clique no jogador ----------------
   Future<void> _onTapJogador({
+    required Map<String, dynamic> autorPj,
     required int timeId,
     required int autorId,
     required String timeNome,
@@ -564,41 +886,137 @@ class _PartidaRodandoPageState extends State<PartidaRodandoPage> {
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  Text('Gol do $timeNome', style: const TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 12),
+                  Container(
+                    width: 48,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Theme.of(ctx).colorScheme.outlineVariant,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Gol do $timeNome',
+                          style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Fechar',
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
                   Align(
                     alignment: Alignment.centerLeft,
-                    child: Text('Assistência (opcional)', style: Theme.of(context).textTheme.labelLarge),
+                    child: Text(
+                      'Assistência (opcional)',
+                      style: Theme.of(ctx).textTheme.bodySmall,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Expanded(
-                    child: ListView(
-                      children: [
-                        RadioListTile<int?>(
-                          value: null,
-                          groupValue: selecionado,
-                          onChanged: (v) => setSB(() => selecionado = v),
-                          title: const Text('Sem assistência'),
-                        ),
-                        const Divider(height: 1),
-                        ...jogadoresDoTime.map((j) {
-                          final jid = j['jogador_id'] as int;
-                          if (jid == autorId) return const SizedBox.shrink();
-                          final apelido = (j['jogador']?['apelido'] ?? j['jogador']?['nome'] ?? 'Jogador').toString();
-                          return RadioListTile<int?>(
+                    child: ListView.separated(
+                      itemCount: 1 + jogadoresDoTime.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 6),
+                      itemBuilder: (context, index) {
+                        if (index == 0) {
+                          final selected = selecionado == null;
+                          return Container(
+                            decoration: BoxDecoration(
+                              color: selected
+                                  ? Theme.of(ctx)
+                                      .colorScheme
+                                      .primary
+                                      .withOpacity(0.08)
+                                  : Theme.of(ctx)
+                                      .colorScheme
+                                      .surfaceVariant
+                                      .withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: selected
+                                    ? Theme.of(ctx)
+                                        .colorScheme
+                                        .primary
+                                        .withOpacity(0.35)
+                                    : Theme.of(ctx).colorScheme.outlineVariant,
+                              ),
+                            ),
+                            child: RadioListTile<int?>(
+                              value: null,
+                              groupValue: selecionado,
+                              onChanged: (v) => setSB(() => selecionado = v),
+                              dense: true,
+                              contentPadding:
+                                  const EdgeInsets.symmetric(horizontal: 8),
+                              title: Row(
+                                children: const [
+                                  Icon(Icons.block, size: 18),
+                                  SizedBox(width: 8),
+                                  Expanded(child: Text('Sem assistência')),
+                                ],
+                              ),
+                            ),
+                          );
+                        }
+
+                        final j = jogadoresDoTime[index - 1];
+                        final jid = j['jogador_id'] as int;
+                        if (jid == autorId) return const SizedBox.shrink();
+                        final apelido = (j['jogador']?['apelido'] ??
+                                j['jogador']?['nome'] ??
+                                'Jogador')
+                            .toString();
+                        final selected = selecionado == jid;
+                        return Container(
+                          decoration: BoxDecoration(
+                            color: selected
+                                ? Theme.of(ctx)
+                                    .colorScheme
+                                    .primary
+                                    .withOpacity(0.08)
+                                : Theme.of(ctx)
+                                    .colorScheme
+                                    .surfaceVariant
+                                    .withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: selected
+                                  ? Theme.of(ctx)
+                                      .colorScheme
+                                      .primary
+                                      .withOpacity(0.35)
+                                  : Theme.of(ctx).colorScheme.outlineVariant,
+                            ),
+                          ),
+                          child: RadioListTile<int?>(
                             value: jid,
                             groupValue: selecionado,
                             onChanged: (v) => setSB(() => selecionado = v),
+                            dense: true,
+                            contentPadding:
+                                const EdgeInsets.symmetric(horizontal: 8),
                             title: Row(
                               children: [
                                 _avatar(j),
                                 const SizedBox(width: 8),
-                                Expanded(child: Text(apelido, overflow: TextOverflow.ellipsis)),
+                                Expanded(
+                                  child: Text(
+                                    apelido,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
                               ],
                             ),
-                          );
-                        }),
-                      ],
+                          ),
+                        );
+                      },
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -623,6 +1041,7 @@ class _PartidaRodandoPageState extends State<PartidaRodandoPage> {
         assistJogadorId: assistId,
       );
       await _recarregarPartida(); // atualiza placar e ícones imediatamente
+      unawaited(_showGolSplash(autorPj, timeNome));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro: $e')));
@@ -630,6 +1049,260 @@ class _PartidaRodandoPageState extends State<PartidaRodandoPage> {
   }
 
   // ---------------- UI helpers ----------------
+  Widget _buildGolSplashCard(
+    BuildContext context,
+    Map<String, dynamic> pj,
+    String timeNome,
+  ) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final nome = _nomeJogadorPj(pj);
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: cs.primary.withOpacity(0.25)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.15),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'GOL!',
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w800,
+              color: cs.primary,
+              letterSpacing: 1,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: cs.primary.withOpacity(0.4), width: 2),
+            ),
+            child: _avatar(pj, size: 64),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            nome,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: cs.primary.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: cs.primary.withOpacity(0.35)),
+            ),
+            child: Text(
+              'GOL DO ${timeNome.toUpperCase()}!',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: cs.primary,
+                fontWeight: FontWeight.w700,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showGolSplash(Map<String, dynamic> pj, String timeNome) async {
+    if (!mounted || _golSplashVisible) return;
+    _golSplashVisible = true;
+
+    final navigator = Navigator.of(context, rootNavigator: true);
+
+    Future<void> close() async {
+      if (!_golSplashVisible) return;
+      if (!mounted) return;
+      if (navigator.canPop()) {
+        navigator.pop();
+      }
+    }
+
+    Future.delayed(const Duration(milliseconds: 1800), close);
+
+    await showGeneralDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierLabel: 'Gol',
+      barrierColor: Colors.black.withOpacity(0.35),
+      transitionDuration: const Duration(milliseconds: 180),
+      pageBuilder: (ctx, anim, anim2) {
+        return Material(
+          type: MaterialType.transparency,
+          child: Center(child: _buildGolSplashCard(ctx, pj, timeNome)),
+        );
+      },
+      transitionBuilder: (ctx, anim, _, child) {
+        final curved = CurvedAnimation(parent: anim, curve: Curves.easeOut);
+        return FadeTransition(
+          opacity: curved,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.95, end: 1).animate(curved),
+            child: child,
+          ),
+        );
+      },
+    );
+
+    _golSplashVisible = false;
+  }
+  Widget _statusPill(ThemeData theme) {
+    final cs = theme.colorScheme;
+    final color = _statusColor(cs);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withOpacity(0.35)),
+      ),
+      child: Text(
+        _statusLabel(),
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: color,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+
+  Widget _miniStatIcon(ThemeData theme, IconData icon, int value, Color color) {
+    return SizedBox(
+      width: 22,
+      height: 18,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Icon(icon, size: 16, color: color),
+          ),
+          Positioned(
+            right: 0,
+            top: -2,
+            child: Text(
+              '$value',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: color,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                height: 1,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _scoreHeader(ThemeData theme) {
+    final cs = theme.colorScheme;
+    final tempoTxt = _tempoTexto();
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+      decoration: BoxDecoration(
+        color: cs.surfaceVariant.withOpacity(0.35),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.outlineVariant),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _p.timeANome,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: cs.primary.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: cs.primary.withOpacity(0.35)),
+                ),
+                child: Text(
+                  '${_p.placarA} x ${_p.placarB}',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Text(
+                  _p.timeBNome,
+                  textAlign: TextAlign.right,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _statusPill(theme),
+              const SizedBox(width: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: cs.surface,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: cs.outlineVariant),
+                ),
+                child: Text(
+                  tempoTxt,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ),
+              if (_p.isLive) ...[
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Toque no jogador para gol',
+                    textAlign: TextAlign.right,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _avatar(Map<String, dynamic> pj, {double size = 32}) {
     final foto = (pj['jogador']?['foto'] as String?)?.trim();
     final nick = (pj['jogador']?['apelido'] ?? pj['jogador']?['nome'] ?? '?').toString();
@@ -653,9 +1326,12 @@ class _PartidaRodandoPageState extends State<PartidaRodandoPage> {
     final apelido = (pj['jogador']?['apelido'] ?? pj['jogador']?['nome'] ?? 'Jogador').toString();
     final gols = _golsPorJogador[jid] ?? 0;
     final asts = _assistsPorJogador[jid] ?? 0;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
 
-    return InkWell(
+    final content = InkWell(
       onTap: () => _onTapJogador(
+        autorPj: pj,
         timeId: timeId,
         autorId: jid,
         timeNome: timeNome,
@@ -669,12 +1345,70 @@ class _PartidaRodandoPageState extends State<PartidaRodandoPage> {
             _avatar(pj),
             const SizedBox(width: 8),
             Expanded(child: Text(apelido, overflow: TextOverflow.ellipsis)),
-            if (gols > 0) Row(children: [const Icon(Icons.sports_soccer, size: 18), Text(' $gols')]),
-            const SizedBox(width: 6),
-            if (asts > 0) Row(children: [const Icon(Icons.checkroom, size: 18), Text(' $asts')]), // “chuteira”
+            if (gols > 0 || asts > 0) ...[
+              const SizedBox(width: 6),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (gols > 0)
+                    _miniStatIcon(theme, Icons.sports_soccer, gols, cs.primary),
+                  if (gols > 0 && asts > 0) const SizedBox(width: 6),
+                  if (asts > 0)
+                    _miniStatIcon(theme, Icons.assistant, asts, cs.secondary),
+                ],
+              ),
+            ],
           ],
         ),
       ),
+    );
+
+    if (!_p.isLive) return content;
+
+    final swipeBg = Container(
+      margin: const EdgeInsets.symmetric(horizontal: 2),
+      decoration: BoxDecoration(
+        color: cs.primary.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: cs.primary.withOpacity(0.2)),
+      ),
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: Padding(
+          padding: const EdgeInsets.only(right: 12),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.swap_horiz, color: cs.primary, size: 18),
+              const SizedBox(width: 6),
+              Text(
+                'Substituir',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: cs.primary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    return Dismissible(
+      key: ValueKey('sub-$timeId-$jid'),
+      direction: DismissDirection.endToStart,
+      confirmDismiss: (_) async {
+        if (_acaoSubstituicao) return false;
+        await _abrirSubstituicaoRapida(
+          jogadorSai: pj,
+          timeId: timeId,
+          timeNome: timeNome,
+        );
+        return false;
+      },
+      background: swipeBg,
+      secondaryBackground: swipeBg,
+      child: content,
     );
   }
 
@@ -748,49 +1482,92 @@ class _PartidaRodandoPageState extends State<PartidaRodandoPage> {
     required int placar,
     required List<Map<String, dynamic>> jogadores,
     required int timeId,
+    required Color accentColor,
     List<Map<String, dynamic>> substituicoes = const [],
     bool mostrarSubstituicoes = false,
   }) {
     final cs = Theme.of(context).colorScheme;
     return Expanded(
       child: Card(
-        margin: const EdgeInsets.all(8),
+        margin: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: accentColor.withOpacity(0.35)),
+        ),
         child: Column(
           children: [
-            const SizedBox(height: 8),
-            Text(titulo, style: const TextStyle(fontWeight: FontWeight.w700)),
-            Text('$placar', style: const TextStyle(fontSize: 18)),
-            const Divider(),
-            Expanded(
-              child: ListView(
+            Container(
+              padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
+              decoration: BoxDecoration(
+                color: accentColor.withOpacity(0.08),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              ),
+              child: Row(
                 children: [
-                  ...jogadores.map((pj) => _playerTile(
-                        pj: pj,
-                        timeId: timeId,
-                        timeNome: titulo,
-                        jogadoresDoTime: jogadores,
-                      )),
-                  if (mostrarSubstituicoes && substituicoes.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 8),
-                      padding: const EdgeInsets.symmetric(vertical: 6),
-                      decoration: BoxDecoration(
-                        color: cs.secondaryContainer,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: cs.primary.withOpacity(0.12)),
-                      ),
-                      child: const Center(
-                        child: Text(
-                          'Substituicoes',
-                          style: TextStyle(fontWeight: FontWeight.w700, letterSpacing: 0.6),
-                        ),
+                  Expanded(
+                    child: Text(
+                      titulo,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: cs.surface,
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: accentColor.withOpacity(0.35)),
+                    ),
+                    child: Text(
+                      '$placar',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontFeatures: [FontFeature.tabularFigures()],
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    ...substituicoes.map(_substituicaoTile),
-                  ],
+                  ),
                 ],
+              ),
+            ),
+            Expanded(
+              child: ListView.separated(
+                padding: const EdgeInsets.fromLTRB(6, 6, 6, 8),
+                itemCount:
+                    jogadores.length + (mostrarSubstituicoes && substituicoes.isNotEmpty ? 1 : 0),
+                separatorBuilder: (_, __) => const SizedBox(height: 4),
+                itemBuilder: (context, index) {
+                  if (index < jogadores.length) {
+                    final pj = jogadores[index];
+                    return _playerTile(
+                      pj: pj,
+                      timeId: timeId,
+                      timeNome: titulo,
+                      jogadoresDoTime: jogadores,
+                    );
+                  }
+                  return Column(
+                    children: [
+                      const SizedBox(height: 4),
+                      Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 6),
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        decoration: BoxDecoration(
+                          color: cs.secondaryContainer,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: cs.primary.withOpacity(0.12)),
+                        ),
+                        child: const Center(
+                          child: Text(
+                            'Substituicoes',
+                            style: TextStyle(fontWeight: FontWeight.w700, letterSpacing: 0.6),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      ...substituicoes.map(_substituicaoTile),
+                    ],
+                  );
+                },
               ),
             ),
           ],
@@ -853,20 +1630,7 @@ class _PartidaRodandoPageState extends State<PartidaRodandoPage> {
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
-                const SizedBox(height: 10),
-                // cronômetro
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: cs.secondaryContainer,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    _p.isLive ? _fmt(_decorrido) : (_p.isFT ? 'FT ${_fmt(_decorrido)}' : '00:00'),
-                    style: const TextStyle(fontSize: 32, fontFeatures: [FontFeature.tabularFigures()]),
-                  ),
-                ),
-                const SizedBox(height: 8),
+                _scoreHeader(Theme.of(context)),
                 // colunas dos times
                 Expanded(
                   child: Row(
@@ -876,6 +1640,7 @@ class _PartidaRodandoPageState extends State<PartidaRodandoPage> {
                         placar: _p.placarA,
                         jogadores: jogadoresA,
                         timeId: _p.timeAId,
+                        accentColor: cs.primary,
                         substituicoes: subsA,
                         mostrarSubstituicoes: mostrarOriginais,
                       ),
@@ -884,6 +1649,7 @@ class _PartidaRodandoPageState extends State<PartidaRodandoPage> {
                         placar: _p.placarB,
                         jogadores: jogadoresB,
                         timeId: _p.timeBId,
+                        accentColor: cs.secondary,
                         substituicoes: subsB,
                         mostrarSubstituicoes: mostrarOriginais,
                       ),

@@ -29,6 +29,12 @@ class _SelecionarJogadoresPageState extends State<SelecionarJogadoresPage> {
   // Estado
   bool _loading = true;
   bool _sending = false;
+  bool _configExpanded = true;
+  final TextEditingController _searchCtrl = TextEditingController();
+  String _filtroPosicao = 'Todas';
+  double _filterHeaderHeight = 168;
+
+  static const List<String> _posicoes = ['Todas', 'Defesa', 'Meio', 'Ataque'];
 
   @override
   void initState() {
@@ -40,6 +46,7 @@ class _SelecionarJogadoresPageState extends State<SelecionarJogadoresPage> {
   void dispose() {
     _descricaoCtrl.dispose();
     _descricaoFocus.dispose();
+    _searchCtrl.dispose();
     super.dispose();
   }
 
@@ -104,164 +111,428 @@ class _SelecionarJogadoresPageState extends State<SelecionarJogadoresPage> {
 
   // --------- UI helpers ---------
 
+  List<Map<String, dynamic>> _jogadoresFiltrados() {
+    final query = _searchCtrl.text.trim().toLowerCase();
+    final filtroPos = _filtroPosicao.toLowerCase();
+
+    return _jogadores.where((j) {
+      final nome = (j['nome'] ?? '').toString().toLowerCase();
+      final apelido = (j['apelido'] ?? '').toString().toLowerCase();
+      final posicao = (j['posicao'] ?? '').toString().toLowerCase();
+
+      if (_filtroPosicao != 'Todas' && !posicao.contains(filtroPos)) {
+        return false;
+      }
+
+      if (query.isEmpty) return true;
+      return nome.contains(query) || apelido.contains(query);
+    }).toList();
+  }
+
+  String _estrategiaLabel() {
+    switch (_estrategia) {
+      case 'balanceado':
+        return 'Balanceado';
+      default:
+        return _estrategia;
+    }
+  }
+
+  Widget _buildConfigResumo(ThemeData theme) {
+    final dataTxt = DateFormat('dd/MM').format(_data);
+    return Text(
+      '$_qtdTimes times • $_qtdJogadoresPorTime jog/time • ${_estrategiaLabel()} • $dataTxt',
+      style: theme.textTheme.bodySmall,
+    );
+  }
+
   Widget _buildConfigCard(BuildContext context) {
     final theme = Theme.of(context);
+    final content = LayoutBuilder(
+      builder: (context, constraints) {
+        final isWideCounters = constraints.maxWidth >= 600; // counters lado a lado
+        final isWidePair = constraints.maxWidth >= 520; // estratégia+data lado a lado
+        final tituloJog = isWideCounters ? 'Jogadores/time' : 'Jog/time';
+
+        // --- Counters (Times / Jogadores por time) ---
+        final counters = isWideCounters
+            ? Row(
+                children: [
+                  Expanded(
+                    child: _CounterTile(
+                      titulo: 'Times',
+                      valor: _qtdTimes,
+                      onInc: _incTimes,
+                      onDec: _decTimes,
+                      compact: true,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _CounterTile(
+                      titulo: tituloJog,
+                      valor: _qtdJogadoresPorTime,
+                      onInc: _incJogPorTime,
+                      onDec: _decJogPorTime,
+                      compact: true,
+                    ),
+                  ),
+                ],
+              )
+            : Column(
+                children: [
+                  _CounterTile(
+                    titulo: 'Times',
+                    valor: _qtdTimes,
+                    onInc: _incTimes,
+                    onDec: _decTimes,
+                    compact: true,
+                  ),
+                  const SizedBox(height: 10),
+                  _CounterTile(
+                    titulo: tituloJog,
+                    valor: _qtdJogadoresPorTime,
+                    onInc: _incJogPorTime,
+                    onDec: _decJogPorTime,
+                    compact: true,
+                  ),
+                ],
+              );
+
+        // --- Estratégia + Data (responsivo) ---
+        final pair = isWidePair
+            ? Row(
+                children: [
+                  Expanded(
+                    child: _StrategyField(
+                      value: _estrategia,
+                      onChanged: (v) => setState(() => _estrategia = v ?? 'balanceado'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(child: _DateField(date: _data, onPick: _pickDate)),
+                ],
+              )
+            : Column(
+                children: [
+                  _StrategyField(
+                    value: _estrategia,
+                    onChanged: (v) => setState(() => _estrategia = v ?? 'balanceado'),
+                    compact: true,
+                  ),
+                  const SizedBox(height: 10),
+                  _DateField(date: _data, onPick: _pickDate, compact: true),
+                ],
+              );
+
+        final countersBox = Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceVariant.withOpacity(0.35),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: theme.colorScheme.outlineVariant),
+          ),
+          child: counters,
+        );
+
+        final pairBox = Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceVariant.withOpacity(0.35),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: theme.colorScheme.outlineVariant),
+          ),
+          child: pair,
+        );
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            countersBox,
+            const SizedBox(height: 12),
+            pairBox,
+            const SizedBox(height: 12),
+
+            // DESCRIÇÃO — obrigatório
+            TextField(
+              controller: _descricaoCtrl,
+              focusNode: _descricaoFocus,
+              maxLength: 80,
+              onChanged: (_) {
+                if (_descricaoError != null) {
+                  setState(() => _descricaoError = null);
+                }
+              },
+              decoration: InputDecoration(
+                labelText: 'Descrição (*)',
+                errorText: _descricaoError,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                hintText: 'Ex.: Sorteio semanal da terça-feira',
+              ),
+            ),
+
+            const SizedBox(height: 10),
+            _buildResumo(theme),
+          ],
+        );
+      },
+    );
 
     return Card(
       margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 1,
       child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final isWideCounters = constraints.maxWidth >= 600; // counters lado a lado
-            final isWidePair = constraints.maxWidth >= 520; // estratégia+data lado a lado
-            final tituloJog = isWideCounters ? 'Jogadores/time' : 'Jog/time';
-
-            // --- Counters (Times / Jogadores por time) ---
-            final counters = isWideCounters
-                ? Row(
-                    children: [
-                      Expanded(
-                        child: _CounterTile(
-                          titulo: 'Times',
-                          valor: _qtdTimes,
-                          onInc: _incTimes,
-                          onDec: _decTimes,
-                          compact: true,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _CounterTile(
-                          titulo: tituloJog,
-                          valor: _qtdJogadoresPorTime,
-                          onInc: _incJogPorTime,
-                          onDec: _decJogPorTime,
-                          compact: true,
-                        ),
-                      ),
-                    ],
-                  )
-                : Column(
-                    children: [
-                      _CounterTile(
-                        titulo: 'Times',
-                        valor: _qtdTimes,
-                        onInc: _incTimes,
-                        onDec: _decTimes,
-                        compact: true,
-                      ),
-                      const SizedBox(height: 10),
-                      _CounterTile(
-                        titulo: tituloJog,
-                        valor: _qtdJogadoresPorTime,
-                        onInc: _incJogPorTime,
-                        onDec: _decJogPorTime,
-                        compact: true,
-                      ),
-                    ],
-                  );
-
-            // --- Estratégia + Data (responsivo) ---
-            final pair = isWidePair
-                ? Row(
-                    children: [
-                      Expanded(
-                        child: _StrategyField(
-                          value: _estrategia,
-                          onChanged: (v) => setState(() => _estrategia = v ?? 'balanceado'),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(child: _DateField(date: _data, onPick: _pickDate)),
-                    ],
-                  )
-                : Column(
-                    children: [
-                      _StrategyField(
-                        value: _estrategia,
-                        onChanged: (v) => setState(() => _estrategia = v ?? 'balanceado'),
-                        compact: true,
-                      ),
-                      const SizedBox(height: 10),
-                      _DateField(date: _data, onPick: _pickDate, compact: true),
-                    ],
-                  );
-
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Configurações do sorteio',
-                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-
-                const SizedBox(height: 12),
-
-                counters,
-
-                const SizedBox(height: 12),
-
-                pair,
-
-                const SizedBox(height: 12),
-
-                // DESCRIÇÃO — obrigatório
-                TextField(
-                  controller: _descricaoCtrl,
-                  focusNode: _descricaoFocus,
-                  maxLength: 80,
-                  onChanged: (_) {
-                    if (_descricaoError != null) {
-                      setState(() => _descricaoError = null);
-                    }
-                  },
-                  decoration: InputDecoration(
-                    labelText: 'Descrição (*)',
-                    errorText: _descricaoError,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                    hintText: 'Ex.: Sorteio semanal da terça-feira',
-                  ),
-                ),
-
-                const SizedBox(height: 8),
-
-                // Indicadores
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            InkWell(
+              onTap: () => setState(() => _configExpanded = !_configExpanded),
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
                   children: [
-                    Text('Selecionados: $_selecionadosQtde', style: theme.textTheme.bodyMedium),
-                    Text('Necessários: $_necessarios',
-                        style:
-                            theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+                    Icon(Icons.tune, color: theme.colorScheme.primary),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Configurações do sorteio',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          if (!_configExpanded) ...[
+                            const SizedBox(height: 4),
+                            _buildConfigResumo(theme),
+                          ],
+                        ],
+                      ),
+                    ),
+                    AnimatedRotation(
+                      turns: _configExpanded ? 0.5 : 0.0,
+                      duration: const Duration(milliseconds: 200),
+                      child: Icon(
+                        Icons.expand_more,
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
                   ],
                 ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            AnimatedSize(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeInOut,
+              child: ClipRect(
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  heightFactor: _configExpanded ? 1.0 : 0.0,
+                  child: content,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
-                const SizedBox(height: 8),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: LinearProgressIndicator(
-                    minHeight: 8,
-                    value: _necessarios == 0 ? 0 : _selecionadosQtde / _necessarios,
-                    backgroundColor: theme.colorScheme.surfaceVariant,
+  Widget _buildFiltroHeader(ThemeData theme, bool overlapsContent) {
+    return _MeasureSize(
+      onChange: (size) {
+        if (!mounted) return;
+        if ((size.height - _filterHeaderHeight).abs() > 1) {
+          setState(() => _filterHeaderHeight = size.height);
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
+        decoration: BoxDecoration(
+          color: theme.scaffoldBackgroundColor,
+          boxShadow: overlapsContent
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.08),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Divider(
+              height: 1,
+              thickness: 1,
+              color: theme.colorScheme.outlineVariant.withOpacity(0.6),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _searchCtrl,
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                hintText: 'Buscar jogador',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _searchCtrl.text.isEmpty
+                    ? null
+                    : IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () {
+                          _searchCtrl.clear();
+                          setState(() {});
+                        },
+                      ),
+                filled: true,
+                fillColor: theme.colorScheme.surfaceVariant.withOpacity(0.25),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _posicoes.map((p) {
+                final selected = _filtroPosicao == p;
+                return ChoiceChip(
+                  label: Text(p),
+                  selected: selected,
+                  onSelected: (_) => setState(() => _filtroPosicao = p),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(
+                  Icons.people_alt_outlined,
+                  size: 18,
+                  color: theme.colorScheme.primary,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'Jogadores',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-
-                const SizedBox(height: 8),
-                if (_faltam > 0)
-                  Text(
-                    'Faltam $_faltam jogador(es) para completar a capacidade.',
-                    style: theme.textTheme.bodySmall?.copyWith(color: Colors.orange[800]),
-                  )
-                else
-                  Text(
-                    'Capacidade completa!',
-                    style: theme.textTheme.bodySmall?.copyWith(color: Colors.green[800]),
-                  ),
+                const Spacer(),
+                _statPill(
+                  theme,
+                  label: 'Selecionados',
+                  value: '$_selecionadosQtde',
+                  color: theme.colorScheme.primary,
+                ),
+                const SizedBox(width: 8),
+                Text('de $_necessarios', style: theme.textTheme.bodySmall),
               ],
-            );
-          },
+            ),
+          ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildResumo(ThemeData theme) {
+    final progress = _necessarios == 0 ? 0.0 : _selecionadosQtde / _necessarios;
+    final okColor = Colors.green[700] ?? theme.colorScheme.primary;
+    final statusOk = _faltam == 0;
+    final statusColor = statusOk ? okColor : theme.colorScheme.error;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _statPill(
+              theme,
+              label: 'Selecionados',
+              value: '$_selecionadosQtde',
+              color: theme.colorScheme.primary,
+            ),
+            _statPill(
+              theme,
+              label: 'Necessários',
+              value: '$_necessarios',
+              color: theme.colorScheme.secondary,
+            ),
+            _statPill(
+              theme,
+              label: statusOk ? 'Status' : 'Faltam',
+              value: statusOk ? 'Completo' : '$_faltam',
+              color: statusColor,
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: LinearProgressIndicator(
+            minHeight: 8,
+            value: progress,
+            backgroundColor: theme.colorScheme.surfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Icon(
+              statusOk ? Icons.check_circle : Icons.warning_amber_rounded,
+              size: 16,
+              color: statusColor,
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                statusOk
+                    ? 'Capacidade completa!'
+                    : 'Faltam $_faltam jogador(es) para completar a capacidade.',
+                style: theme.textTheme.bodySmall?.copyWith(color: statusColor),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _statPill(
+    ThemeData theme, {
+    required String label,
+    required String value,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withOpacity(0.35)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: theme.textTheme.bodySmall?.copyWith(color: color),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            value,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -277,6 +548,7 @@ class _SelecionarJogadoresPageState extends State<SelecionarJogadoresPage> {
   }
 
   Widget _buildJogadorItem(Map<String, dynamic> jogador) {
+    final theme = Theme.of(context);
     final nome = (jogador['nome'] ?? '') as String;
     final avatarUrl = (jogador['foto'] as String?)?.trim();
     final id = jogador['id'] as int;
@@ -287,14 +559,33 @@ class _SelecionarJogadoresPageState extends State<SelecionarJogadoresPage> {
     // Se atingiu a capacidade, bloqueia novas marcações (mas permite desmarcar)
     final bloqueado = _atingiuCapacidade && !marcado;
 
-    return CheckboxListTile(
-      title: Text(nome),
-      value: marcado,
-      onChanged: bloqueado ? null : (v) => _toggleSelecionado(id, v),
-      controlAffinity: ListTileControlAffinity.trailing,
-      secondary: (avatarUrl != null && avatarUrl.isNotEmpty)
-          ? CircleAvatar(backgroundImage: NetworkImage(avatarUrl))
-          : CircleAvatar(child: Text(inicial)),
+    final isSelected = marcado;
+    final borderColor =
+        isSelected ? theme.colorScheme.primary : theme.colorScheme.outlineVariant;
+    final tileColor = isSelected
+        ? theme.colorScheme.primary.withOpacity(0.08)
+        : theme.colorScheme.surfaceVariant.withOpacity(0.2);
+
+    return Card(
+      margin: EdgeInsets.zero,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: borderColor),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: CheckboxListTile(
+        title: Text(nome),
+        value: marcado,
+        dense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        onChanged: bloqueado ? null : (v) => _toggleSelecionado(id, v),
+        controlAffinity: ListTileControlAffinity.trailing,
+        tileColor: tileColor,
+        secondary: (avatarUrl != null && avatarUrl.isNotEmpty)
+            ? CircleAvatar(backgroundImage: NetworkImage(avatarUrl))
+            : CircleAvatar(child: Text(inicial)),
+      ),
     );
   }
 
@@ -487,6 +778,7 @@ class _SelecionarJogadoresPageState extends State<SelecionarJogadoresPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final jogadoresFiltrados = _jogadoresFiltrados();
 
     return Scaffold(
       appBar: AppBar(
@@ -494,20 +786,61 @@ class _SelecionarJogadoresPageState extends State<SelecionarJogadoresPage> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
-                _buildConfigCard(context),
-                const SizedBox(height: 4),
-                Expanded(
-                  child: ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 88),
-                    itemCount: _jogadores.length,
-                    separatorBuilder: (_, __) => const Divider(height: 0),
-                    itemBuilder: (context, index) {
-                      return _buildJogadorItem(_jogadores[index]);
-                    },
+          : CustomScrollView(
+              slivers: [
+                SliverToBoxAdapter(child: _buildConfigCard(context)),
+                SliverPersistentHeader(
+                  pinned: true,
+                  delegate: _FilterHeaderDelegate(
+                    minHeight: _filterHeaderHeight,
+                    maxHeight: _filterHeaderHeight,
+                    builder: (context, overlapsContent) =>
+                        _buildFiltroHeader(theme, overlapsContent),
                   ),
                 ),
+                if (jogadoresFiltrados.isEmpty)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 20, 16, 40),
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.search_off,
+                            size: 36,
+                            color: theme.colorScheme.outline,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Nenhum jogador encontrado',
+                            style: theme.textTheme.bodyMedium,
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Ajuste a busca ou os filtros.',
+                            style: theme.textTheme.bodySmall,
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 96),
+                    sliver: SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          final isLast = index == jogadoresFiltrados.length - 1;
+                          return Padding(
+                            padding: EdgeInsets.only(bottom: isLast ? 0 : 8),
+                            child: _buildJogadorItem(jogadoresFiltrados[index]),
+                          );
+                        },
+                        childCount: jogadoresFiltrados.length,
+                      ),
+                    ),
+                  ),
               ],
             ),
 
@@ -523,7 +856,9 @@ class _SelecionarJogadoresPageState extends State<SelecionarJogadoresPage> {
             label: Text(
               _sending
                   ? 'Gerando...'
-                  : 'Gerar dois sorteios (${_selecionadosQtde}/$_necessarios)',
+                  : _faltam == 0
+                      ? 'Gerar dois sorteios (${_selecionadosQtde}/$_necessarios)'
+                      : 'Faltam $_faltam para gerar',
               style: theme.textTheme.titleSmall?.copyWith(color: Colors.white),
             ),
           ),
@@ -580,8 +915,9 @@ class _CounterTile extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceVariant.withOpacity(0.25),
         border: Border.all(color: theme.colorScheme.outlineVariant),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
       ),
       padding: compact
           ? const EdgeInsets.symmetric(horizontal: 10, vertical: 8)
@@ -637,6 +973,8 @@ class _StrategyField extends StatelessWidget {
       decoration: InputDecoration(
         labelText: 'Estratégia',
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        filled: true,
+        fillColor: theme.colorScheme.surfaceVariant.withOpacity(0.25),
         contentPadding: contentPadding,
       ),
       child: DropdownButtonHideUnderline(
@@ -680,6 +1018,7 @@ class _DateField extends StatelessWidget {
       child: Container(
         padding: pad,
         decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceVariant.withOpacity(0.25),
           border: Border.all(color: theme.colorScheme.outlineVariant),
           borderRadius: BorderRadius.circular(10),
         ),
@@ -702,5 +1041,64 @@ class _DateField extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _FilterHeaderDelegate extends SliverPersistentHeaderDelegate {
+  _FilterHeaderDelegate({
+    required this.minHeight,
+    required this.maxHeight,
+    required this.builder,
+  });
+
+  final double minHeight;
+  final double maxHeight;
+  final Widget Function(BuildContext context, bool overlapsContent) builder;
+
+  @override
+  double get minExtent => minHeight;
+
+  @override
+  double get maxExtent => maxHeight;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return builder(context, overlapsContent);
+  }
+
+  @override
+  bool shouldRebuild(covariant _FilterHeaderDelegate oldDelegate) {
+    return minHeight != oldDelegate.minHeight ||
+        maxHeight != oldDelegate.maxHeight ||
+        builder != oldDelegate.builder;
+  }
+}
+
+class _MeasureSize extends StatefulWidget {
+  const _MeasureSize({required this.onChange, required this.child});
+
+  final ValueChanged<Size> onChange;
+  final Widget child;
+
+  @override
+  State<_MeasureSize> createState() => _MeasureSizeState();
+}
+
+class _MeasureSizeState extends State<_MeasureSize> {
+  Size _oldSize = Size.zero;
+
+  @override
+  Widget build(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final newSize = context.size;
+      if (newSize == null) return;
+      final widthDiff = (newSize.width - _oldSize.width).abs();
+      final heightDiff = (newSize.height - _oldSize.height).abs();
+      if (widthDiff > 1 || heightDiff > 1) {
+        _oldSize = newSize;
+        widget.onChange(newSize);
+      }
+    });
+    return widget.child;
   }
 }
