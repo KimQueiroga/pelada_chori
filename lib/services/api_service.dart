@@ -158,6 +158,24 @@ class ApiService {
     return (modo: modo, sorteios: sorteios, votosPorId: votos);
   }
 
+  static Future<List<SorteioDetalhe>> getSorteiosPorData(DateTime data) async {
+    final uri = Uri.parse(
+      '${ApiConfig.baseUrl}/sorteios/por-data?data=${_ymd(data)}',
+    );
+    final resp = await _getWithAuth(uri);
+
+    if (resp.statusCode == 200) {
+      final raw = jsonDecode(resp.body) as List;
+      return raw
+          .map((e) => SorteioDetalhe.fromJson((e as Map).cast<String, dynamic>()))
+          .toList();
+    }
+    if (resp.statusCode == 204) {
+      return const <SorteioDetalhe>[];
+    }
+    throw Exception('Erro ao carregar sorteios da data: ${resp.body}');
+  }
+
   static Future<({
     String mesReferencia,
     List<Map<String, dynamic>> vitorias,

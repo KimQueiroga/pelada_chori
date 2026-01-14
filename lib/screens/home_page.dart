@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:pelada_chori/screens/configuracoes_page.dart';
 import 'package:pelada_chori/screens/estatisticas_page.dart';
 import 'package:pelada_chori/screens/meus_dados_page.dart';
+import 'package:pelada_chori/screens/partidas_registradas_page.dart';
 import 'package:pelada_chori/screens/sorteio_page.dart';
 import 'package:pelada_chori/screens/votacao_page.dart';
 import 'package:pelada_chori/services/api_service.dart';
@@ -73,7 +74,7 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  List<Map<String, dynamic>> getBotoesExtras(BuildContext context) => [
+  List<Map<String, dynamic>> getBotoesConta(BuildContext context) => [
         {
           'label': 'Meus dados',
           'icon': Icons.person,
@@ -83,7 +84,7 @@ class _HomePageState extends State<HomePage> {
               ),
         },
         {
-          'label': 'Configurações',
+          'label': 'Configuracoes',
           'icon': Icons.settings,
           'onTap': () => Navigator.push(
                 context,
@@ -96,6 +97,11 @@ class _HomePageState extends State<HomePage> {
           'onTap': () => _confirmarLogout(context),
         },
       ];
+
+  List<Map<String, dynamic>> getBotoesAcessoRapidoExtras(BuildContext context) =>
+      getBotoesConta(context)
+          .where((btn) => btn['label'] != 'Sair')
+          .toList();
 
   Future<void> _confirmarLogout(BuildContext context) async {
     final cs = Theme.of(context).colorScheme;
@@ -229,7 +235,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildDrawer(ColorScheme cs, List<Map<String, dynamic>> botoesFixos) {
-    final itens = [...botoesFixos, ...getBotoesExtras(context)];
+    final itens = [...botoesFixos, ...getBotoesConta(context)];
 
     return Drawer(
       child: SafeArea(
@@ -325,6 +331,14 @@ class _HomePageState extends State<HomePage> {
         },
       },
       {
+        'label': 'Partidas',
+        'icon': Icons.sports_soccer,
+        'onTap': () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const PartidasRegistradasPage()),
+            ),
+      },
+      {
         'label': 'Estatísticas',
         'icon': Icons.show_chart,
         'onTap': () => Navigator.push(
@@ -334,7 +348,10 @@ class _HomePageState extends State<HomePage> {
       },
     ];
 
-    final botoes = [...botoesFixos, if (expandido) ...getBotoesExtras(context)];
+    final botoes = [
+      ...botoesFixos,
+      if (expandido) ...getBotoesAcessoRapidoExtras(context),
+    ];
 
     return Scaffold(
       appBar: AppBar(
