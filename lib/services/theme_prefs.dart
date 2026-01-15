@@ -21,7 +21,7 @@ class ThemePrefs {
       'light' => ThemeMode.light,
       'dark' => ThemeMode.dark,
       'system' => ThemeMode.system,
-      _ => ThemeMode.light, // default do app (troque se quiser)
+      _ => ThemeMode.system, // default: segue o dispositivo
     };
   }
 }

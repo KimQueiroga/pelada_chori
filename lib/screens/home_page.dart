@@ -207,29 +207,40 @@ class _HomePageState extends State<HomePage> {
       texto = 'Partidas hoje: $_partidasHoje';
     }
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: cs.primary.withOpacity(0.10),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: cs.primary.withOpacity(0.20)),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: cs.primary),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              texto,
-              style: TextStyle(fontWeight: FontWeight.w600, color: cs.onSurface),
-            ),
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const PartidasRegistradasPage()),
+        ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: cs.primary.withOpacity(0.10),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: cs.primary.withOpacity(0.20)),
           ),
-          IconButton(
-            tooltip: 'Atualizar',
-            icon: Icon(Icons.refresh, size: 18, color: cs.primary),
-            onPressed: _statusCarregando ? null : _carregarStatusDia,
+          child: Row(
+            children: [
+              Icon(icon, size: 18, color: cs.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  texto,
+                  style:
+                      TextStyle(fontWeight: FontWeight.w600, color: cs.onSurface),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Atualizar',
+                icon: Icon(Icons.refresh, size: 18, color: cs.primary),
+                onPressed: _statusCarregando ? null : _carregarStatusDia,
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -338,19 +349,30 @@ class _HomePageState extends State<HomePage> {
               MaterialPageRoute(builder: (_) => const PartidasRegistradasPage()),
             ),
       },
-      {
-        'label': 'Estatísticas',
-        'icon': Icons.show_chart,
-        'onTap': () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const EstatisticasPage()),
-            ),
-      },
+    ];
+
+    final Map<String, dynamic> botaoEstatisticas = {
+      'label': 'Estatísticas',
+      'icon': Icons.show_chart,
+      'onTap': () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const EstatisticasPage()),
+          ),
+    };
+
+    final List<Map<String, dynamic>> botoesExtras = [
+      botaoEstatisticas,
+      ...getBotoesAcessoRapidoExtras(context),
+    ];
+
+    final botoesDrawer = [
+      ...botoesFixos,
+      botaoEstatisticas,
     ];
 
     final botoes = [
       ...botoesFixos,
-      if (expandido) ...getBotoesAcessoRapidoExtras(context),
+      if (expandido) ...botoesExtras,
     ];
 
     return Scaffold(
@@ -375,7 +397,7 @@ class _HomePageState extends State<HomePage> {
           ),
         ],
       ),
-      endDrawer: _buildDrawer(cs, botoesFixos),
+      endDrawer: _buildDrawer(cs, botoesDrawer),
       body: SafeArea(
         child: Container(
           width: double.infinity,
@@ -461,7 +483,12 @@ class _HomePageState extends State<HomePage> {
                     ),
                     const Spacer(),
                     TextButton(
-                      onPressed: () => _showEmBreve(context),
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const EstatisticasPage(),
+                        ),
+                      ),
                       style: TextButton.styleFrom(
                         padding: EdgeInsets.zero,
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,

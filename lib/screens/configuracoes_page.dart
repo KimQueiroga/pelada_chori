@@ -50,7 +50,11 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final isDark = themeController.mode == ThemeMode.dark;
+    final mode = themeController.mode;
+    final isSystem = mode == ThemeMode.system;
+    final isDark = mode == ThemeMode.dark ||
+        (isSystem &&
+            MediaQuery.of(context).platformBrightness == Brightness.dark);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Configurações')),

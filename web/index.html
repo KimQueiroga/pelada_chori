@@ -31,8 +31,33 @@
 
   <title>pelada_chori</title>
   <link rel="manifest" href="manifest.json">
+  <style>
+    #splash {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #fff6ef;
+      z-index: 9999;
+    }
+    #splash img {
+      width: 180px;
+      height: 180px;
+      object-fit: contain;
+    }
+  </style>
 </head>
 <body>
+  <div id="splash">
+    <img src="assets/undraw_goal_rulh.svg" alt="Pelada Chori">
+  </div>
+  <script>
+    window.addEventListener('flutter-first-frame', function () {
+      var splash = document.getElementById('splash');
+      if (splash) splash.remove();
+    });
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

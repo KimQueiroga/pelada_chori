@@ -7,7 +7,8 @@ import 'package:pelada_chori/services/api_service.dart';
 class StatEntry {
   final String nome;
   final int valor;
-  const StatEntry(this.nome, this.valor);
+  final int posicao;
+  const StatEntry(this.nome, this.valor, this.posicao);
 }
 
 class HomeHighlightsCarousel extends StatefulWidget {
@@ -96,13 +97,17 @@ class _HomeHighlightsCarouselState extends State<HomeHighlightsCarousel> {
   }
 
   List<StatEntry> _mapEntries(List<Map<String, dynamic>> raw) {
-    return raw.map((e) {
+    final items = <StatEntry>[];
+    for (var i = 0; i < raw.length; i++) {
+      final e = raw[i];
       final nome = (e['nome'] ?? '').toString().trim();
       final valor = (e['valor'] is num)
           ? (e['valor'] as num).toInt()
           : int.tryParse((e['valor'] ?? '0').toString()) ?? 0;
-      return StatEntry(nome.isEmpty ? 'Jogador' : nome, valor);
-    }).toList();
+      final posicao = (e['posicao'] as num?)?.toInt() ?? (i + 1);
+      items.add(StatEntry(nome.isEmpty ? 'Jogador' : nome, valor, posicao));
+    }
+    return items;
   }
 
   // breakpoints responsivos
@@ -319,7 +324,7 @@ class _Top5Card extends StatelessWidget {
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(
-                                '${i + 1}',
+                                '${e.posicao}',
                                 style: textTheme.labelMedium?.copyWith(
                                   fontWeight: FontWeight.w800,
                                   color: textStrong,

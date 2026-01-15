@@ -459,6 +459,8 @@ class _EstatisticasPageState extends State<EstatisticasPage> {
                                             ),
                                             itemBuilder: (context, index) {
                                               final item = _items[index];
+                                              final rank =
+                                                  item.posicao > 0 ? item.posicao : index + 1;
                                               return Padding(
                                                 padding: const EdgeInsets.symmetric(
                                                   horizontal: 4,
@@ -477,7 +479,7 @@ class _EstatisticasPageState extends State<EstatisticasPage> {
                                                             BorderRadius.circular(10),
                                                       ),
                                                       child: Text(
-                                                        '${index + 1}',
+                                                        '$rank',
                                                         style: TextStyle(
                                                           color: cs.primary,
                                                           fontWeight: FontWeight.w800,
@@ -541,11 +543,13 @@ class _StatItem {
   final int jogadorId;
   final String nome;
   final int valor;
+  final int posicao;
 
   const _StatItem({
     required this.jogadorId,
     required this.nome,
     required this.valor,
+    required this.posicao,
   });
 
   factory _StatItem.fromMap(Map<String, dynamic> map) {
@@ -556,6 +560,7 @@ class _StatItem {
       valor: (map['valor'] as num?)?.toInt() ??
           int.tryParse((map['valor'] ?? '0').toString()) ??
           0,
+      posicao: (map['posicao'] as num?)?.toInt() ?? 0,
     );
   }
 }
