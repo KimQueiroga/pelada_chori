@@ -76,9 +76,15 @@ class PushServiceImpl implements PushService {
     if (sub == null) return true;
 
     final endpoint = sub.endpoint;
-    if (endpoint == null || endpoint.isEmpty) return true;
     await sub.unsubscribe();
-    return _removeSubscription(endpoint);
+
+    final still = await pushManager.getSubscription();
+    final removed = still == null;
+    if (!removed) return false;
+
+    if (endpoint == null || endpoint.isEmpty) return true;
+    await _removeSubscription(endpoint);
+    return true;
   }
 
   Future<bool> _sendSubscription(html.PushSubscription sub) async {

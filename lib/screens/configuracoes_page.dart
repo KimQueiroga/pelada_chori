@@ -45,7 +45,7 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _pushError = 'NÃ£o foi possÃ­vel verificar as notificaÃ§Ãµes.';
+        _pushError = 'Não foi possível verificar as notificações.';
         _pushLoading = false;
       });
     }
@@ -66,15 +66,15 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
       if (!ok) {
         setState(() {
           _pushError =
-              enable ? 'NÃ£o foi possÃ­vel ativar.' : 'NÃ£o foi possÃ­vel desativar.';
+              enable ? 'Não foi possível ativar.' : 'Não foi possível desativar.';
         });
       }
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _pushError = enable
-            ? 'Erro ao ativar notificaÃ§Ãµes.'
-            : 'Erro ao desativar notificaÃ§Ãµes.';
+            ? 'Erro ao ativar notificações.'
+            : 'Erro ao desativar notificações.';
       });
     } finally {
       if (mounted) {
@@ -211,21 +211,22 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
                 const SizedBox(height: 12),
                 _sectionCard(
                   context: context,
-                  title: 'NotificaÃ§Ãµes',
+                  title: 'Notificações',
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       SwitchListTile(
                         value: _pushEnabled,
-                        onChanged:
-                            _pushSupported ? (v) => _togglePush(v) : null,
+                        onChanged: (_pushSupported && !_pushLoading)
+                            ? (v) => _togglePush(v)
+                            : null,
                         contentPadding: EdgeInsets.zero,
-                        title: const Text('Receber notificaÃ§Ãµes'),
+                        title: const Text('Receber notificações'),
                         subtitle: Text(
                           _pushLoading
-                              ? 'Verificando...'
+                              ? 'Processando...'
                               : (!_pushSupported
-                                  ? 'Seu navegador nÃ£o suporta notificaÃ§Ãµes.'
+                                  ? 'Seu navegador não suporta notificações.'
                                   : _pushEnabled
                                       ? 'Ativado'
                                       : 'Desativado'),
@@ -244,7 +245,7 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
                         Padding(
                           padding: const EdgeInsets.only(top: 6),
                           child: Text(
-                            'PermissÃ£o bloqueada no navegador. Ative manualmente nas configuraÃ§Ãµes do site.',
+                            'Permissão bloqueada no navegador. Ative manualmente nas configurações do site.',
                             style: TextStyle(
                               color: cs.error,
                               fontWeight: FontWeight.w600,
@@ -264,7 +265,7 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
                         ),
                       const SizedBox(height: 6),
                       Text(
-                        'No iOS, as notificaÃ§Ãµes funcionam apenas apÃ³s adicionar o app Ã  tela inicial.',
+                        'No iOS, as notificações funcionam apenas após adicionar o app à tela inicial.',
                         style: TextStyle(color: cs.onSurface.withOpacity(0.6)),
                       ),
                     ],
