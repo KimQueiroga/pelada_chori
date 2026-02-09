@@ -9,7 +9,7 @@ pipelines:
             - flutter-cache
           script:
             - flutter pub get
-            - flutter build web --release --dart-define=ENV=homol
+            - flutter build web --release --dart-define=ENV=homol --dart-define=VAPID_PUBLIC_KEY=$VAPID_PUBLIC_KEY
             - apt-get update && apt-get install -y unzip curl
             - curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
             - unzip awscliv2.zip
@@ -24,7 +24,7 @@ pipelines:
             - flutter-cache
           script:
             - flutter pub get
-            - flutter build web --release --dart-define=ENV=prod
+            - flutter build web --release --dart-define=ENV=prod --dart-define=VAPID_PUBLIC_KEY=$VAPID_PUBLIC_KEY
             - apt-get update && apt-get install -y unzip curl
             - curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
             - unzip awscliv2.zip

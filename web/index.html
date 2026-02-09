@@ -58,6 +58,16 @@
       if (splash) splash.remove();
     });
   </script>
+  <script>
+    window.flutterConfiguration = {
+      serviceWorkerVersion: null,
+    };
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('sw.js');
+      });
+    }
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

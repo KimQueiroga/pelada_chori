@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../main.dart' show themeController;
+import 'package:pelada_chori/services/push_service.dart';
 import 'package:pelada_chori/widgets/app_version_text.dart';
 
 class ConfiguracoesPage extends StatefulWidget {
@@ -11,6 +12,77 @@ class ConfiguracoesPage extends StatefulWidget {
 }
 
 class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
+  bool _pushLoading = true;
+  bool _pushSupported = false;
+  bool _pushEnabled = false;
+  String _pushPermission = 'default';
+  String? _pushError;
+
+  @override
+  void initState() {
+    super.initState();
+    _carregarPushStatus();
+  }
+
+  Future<void> _carregarPushStatus() async {
+    setState(() {
+      _pushLoading = true;
+      _pushError = null;
+    });
+
+    try {
+      final supported = await pushService.isSupported();
+      final permission = await pushService.permission();
+      final subscribed = await pushService.isSubscribed();
+
+      if (!mounted) return;
+      setState(() {
+        _pushSupported = supported;
+        _pushPermission = permission;
+        _pushEnabled = subscribed;
+        _pushLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _pushError = 'NÃ£o foi possÃ­vel verificar as notificaÃ§Ãµes.';
+        _pushLoading = false;
+      });
+    }
+  }
+
+  Future<void> _togglePush(bool enable) async {
+    setState(() {
+      _pushLoading = true;
+      _pushError = null;
+    });
+
+    try {
+      final ok = enable
+          ? await pushService.subscribe()
+          : await pushService.unsubscribe();
+
+      if (!mounted) return;
+      if (!ok) {
+        setState(() {
+          _pushError =
+              enable ? 'NÃ£o foi possÃ­vel ativar.' : 'NÃ£o foi possÃ­vel desativar.';
+        });
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _pushError = enable
+            ? 'Erro ao ativar notificaÃ§Ãµes.'
+            : 'Erro ao desativar notificaÃ§Ãµes.';
+      });
+    } finally {
+      if (mounted) {
+        await _carregarPushStatus();
+      }
+    }
+  }
+
   Widget _sectionCard({
     required BuildContext context,
     required String title,
@@ -134,6 +206,68 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
                       ),
                       child: Icon(Icons.dark_mode, color: cs.primary),
                     ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _sectionCard(
+                  context: context,
+                  title: 'NotificaÃ§Ãµes',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SwitchListTile(
+                        value: _pushEnabled,
+                        onChanged:
+                            _pushSupported ? (v) => _togglePush(v) : null,
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Receber notificaÃ§Ãµes'),
+                        subtitle: Text(
+                          _pushLoading
+                              ? 'Verificando...'
+                              : (!_pushSupported
+                                  ? 'Seu navegador nÃ£o suporta notificaÃ§Ãµes.'
+                                  : _pushEnabled
+                                      ? 'Ativado'
+                                      : 'Desativado'),
+                          style: TextStyle(color: cs.onSurface.withOpacity(0.6)),
+                        ),
+                        secondary: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: cs.primary.withOpacity(0.12),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(Icons.notifications, color: cs.primary),
+                        ),
+                      ),
+                      if (_pushPermission == 'denied')
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(
+                            'PermissÃ£o bloqueada no navegador. Ative manualmente nas configuraÃ§Ãµes do site.',
+                            style: TextStyle(
+                              color: cs.error,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      if (_pushError != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(
+                            _pushError!,
+                            style: TextStyle(
+                              color: cs.error,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'No iOS, as notificaÃ§Ãµes funcionam apenas apÃ³s adicionar o app Ã  tela inicial.',
+                        style: TextStyle(color: cs.onSurface.withOpacity(0.6)),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 12),

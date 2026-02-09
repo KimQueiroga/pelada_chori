@@ -152,7 +152,19 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Widget _buildAtalho(Map<String, dynamic> btn, ColorScheme cs) {
+  Widget _buildAtalho(
+    Map<String, dynamic> btn,
+    ColorScheme cs, {
+    bool compact = false,
+  }) {
+    final iconSize = compact ? 20.0 : 26.0;
+    final iconPadding = compact ? 6.0 : 10.0;
+    final labelStyle = TextStyle(
+      color: cs.onSurface,
+      fontWeight: FontWeight.w600,
+      fontSize: compact ? 12 : 14,
+    );
+
     return InkWell(
       onTap: btn['onTap'],
       borderRadius: BorderRadius.circular(16),
@@ -173,18 +185,18 @@ class _HomePageState extends State<HomePage> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              padding: const EdgeInsets.all(8),
+              padding: EdgeInsets.all(iconPadding),
               decoration: BoxDecoration(
                 color: cs.primary.withOpacity(0.12),
                 shape: BoxShape.circle,
               ),
-              child: Icon(btn['icon'], size: 22, color: cs.primary),
+              child: Icon(btn['icon'], size: iconSize, color: cs.primary),
             ),
-            const SizedBox(height: 10),
+            SizedBox(height: compact ? 8 : 12),
             Text(
               btn['label'],
               textAlign: TextAlign.center,
-              style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w600),
+              style: labelStyle,
             ),
           ],
         ),
@@ -320,6 +332,9 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final media = MediaQuery.of(context);
+    final screenWidth = media.size.width;
+    final maxContentWidth = screenWidth >= 1100 ? 1100.0 : screenWidth;
     final mostrarBanner =
         _statusCarregando || _statusErro != null || _partidasHoje > 0;
 
@@ -414,9 +429,13 @@ class _HomePageState extends State<HomePage> {
           ),
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxContentWidth),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
                 if (mostrarBanner) _buildStatusBanner(cs),
                 if (mostrarBanner) const SizedBox(height: 12),
                 Container(
@@ -459,13 +478,35 @@ class _HomePageState extends State<HomePage> {
                         ],
                       ),
                       const SizedBox(height: 8),
-                      GridView.count(
-                        crossAxisCount: 3,
-                        mainAxisSpacing: 12,
-                        crossAxisSpacing: 12,
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        children: botoes.map((btn) => _buildAtalho(btn, cs)).toList(),
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          int columns;
+                          if (constraints.maxWidth < 340) {
+                            columns = 2;
+                          } else if (constraints.maxWidth < 520) {
+                            columns = 3;
+                          } else {
+                            columns = (constraints.maxWidth / 200).floor();
+                            if (columns < 3) columns = 3;
+                            if (columns > 4) columns = 4;
+                          }
+
+                          final compact = columns <= 3;
+                          return GridView.builder(
+                            gridDelegate:
+                                SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: columns,
+                              mainAxisSpacing: 12,
+                              crossAxisSpacing: 12,
+                              childAspectRatio: compact ? 1.15 : 1.0,
+                            ),
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: botoes.length,
+                            itemBuilder: (context, index) =>
+                                _buildAtalho(botoes[index], cs, compact: compact),
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -507,7 +548,9 @@ class _HomePageState extends State<HomePage> {
                 const AppVersionText(
                   padding: EdgeInsets.only(bottom: 8),
                 ),
-              ],
+                  ],
+                ),
+              ),
             ),
           ),
         ),
