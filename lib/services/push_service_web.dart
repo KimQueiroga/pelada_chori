@@ -12,8 +12,11 @@ import 'push_service.dart';
 
 class PushServiceImpl implements PushService {
   bool _hasSupport() {
-    return html.window.navigator.serviceWorker != null &&
-        html.Notification.supported;
+    final nav = html.window.navigator;
+    final hasSw = nav.serviceWorker != null;
+    final hasNotification = html.Notification.supported;
+    final hasPush = js_util.hasProperty(html.window, 'PushManager');
+    return hasSw && hasNotification && hasPush;
   }
 
   @override
@@ -28,7 +31,7 @@ class PushServiceImpl implements PushService {
   @override
   Future<bool> isSubscribed() async {
     if (!_hasSupport()) return false;
-    final reg = await html.window.navigator.serviceWorker?.ready;
+    final reg = await _getRegistration();
     if (reg == null) return false;
     final pushManager = reg.pushManager;
     if (pushManager == null) return false;
@@ -44,7 +47,7 @@ class PushServiceImpl implements PushService {
     final perm = await html.Notification.requestPermission();
     if (perm != 'granted') return false;
 
-    final reg = await html.window.navigator.serviceWorker?.ready;
+    final reg = await _getRegistration();
     if (reg == null) return false;
 
     final pushManager = reg.pushManager;
@@ -57,9 +60,15 @@ class PushServiceImpl implements PushService {
         'applicationServerKey': _decodeVapidKey(PushConfig.vapidPublicKey),
       });
 
-      sub = await js_util.promiseToFuture<html.PushSubscription>(
-        js_util.callMethod(pushManager, 'subscribe', [options]),
-      );
+      try {
+        final result = await js_util.promiseToFuture<dynamic>(
+          js_util.callMethod(pushManager, 'subscribe', [options]),
+        );
+        if (result is! html.PushSubscription) return false;
+        sub = result;
+      } catch (_) {
+        return false;
+      }
     }
 
     return _sendSubscription(sub);
@@ -68,7 +77,7 @@ class PushServiceImpl implements PushService {
   @override
   Future<bool> unsubscribe() async {
     if (!_hasSupport()) return false;
-    final reg = await html.window.navigator.serviceWorker?.ready;
+    final reg = await _getRegistration();
     if (reg == null) return false;
     final pushManager = reg.pushManager;
     if (pushManager == null) return false;
@@ -76,15 +85,27 @@ class PushServiceImpl implements PushService {
     if (sub == null) return true;
 
     final endpoint = sub.endpoint;
-    await sub.unsubscribe();
-
-    final still = await pushManager.getSubscription();
-    final removed = still == null;
+    final removed = await sub.unsubscribe();
     if (!removed) return false;
+
+    final stillSubscribed = await pushManager.getSubscription();
+    if (stillSubscribed != null) return false;
 
     if (endpoint == null || endpoint.isEmpty) return true;
     await _removeSubscription(endpoint);
     return true;
+  }
+
+  Future<html.ServiceWorkerRegistration?> _getRegistration() async {
+    final sw = html.window.navigator.serviceWorker;
+    if (sw == null) return null;
+    try {
+      final reg = await sw.getRegistration();
+      if (reg != null) return reg;
+      return await sw.register('sw.js');
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<bool> _sendSubscription(html.PushSubscription sub) async {

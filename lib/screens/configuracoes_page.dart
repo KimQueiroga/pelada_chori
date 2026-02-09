@@ -55,6 +55,7 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
     setState(() {
       _pushLoading = true;
       _pushError = null;
+      _pushEnabled = enable;
     });
 
     try {
@@ -127,6 +128,8 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
     final isDark = mode == ThemeMode.dark ||
         (isSystem &&
             MediaQuery.of(context).platformBrightness == Brightness.dark);
+    final canTogglePush =
+        _pushSupported && !_pushLoading && _pushPermission != 'denied';
 
     return Scaffold(
       appBar: AppBar(title: const Text('Configurações')),
@@ -217,9 +220,7 @@ class _ConfiguracoesPageState extends State<ConfiguracoesPage> {
                     children: [
                       SwitchListTile(
                         value: _pushEnabled,
-                        onChanged: (_pushSupported && !_pushLoading)
-                            ? (v) => _togglePush(v)
-                            : null,
+                        onChanged: canTogglePush ? (v) => _togglePush(v) : null,
                         contentPadding: EdgeInsets.zero,
                         title: const Text('Receber notificações'),
                         subtitle: Text(
