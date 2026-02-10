@@ -35,7 +35,7 @@ class PushServiceImpl implements PushService {
     if (reg == null) return false;
     final pushManager = reg.pushManager;
     if (pushManager == null) return false;
-    final sub = await pushManager.getSubscription();
+    final sub = await _safeGetSubscription(pushManager);
     return sub != null;
   }
 
@@ -53,7 +53,7 @@ class PushServiceImpl implements PushService {
     final pushManager = reg.pushManager;
     if (pushManager == null) return false;
 
-    var sub = await pushManager.getSubscription();
+    var sub = await _safeGetSubscription(pushManager);
     if (sub == null) {
       final options = js_util.jsify({
         'userVisibleOnly': true,
@@ -81,14 +81,14 @@ class PushServiceImpl implements PushService {
     if (reg == null) return false;
     final pushManager = reg.pushManager;
     if (pushManager == null) return false;
-    final sub = await pushManager.getSubscription();
+    final sub = await _safeGetSubscription(pushManager);
     if (sub == null) return true;
 
     final endpoint = sub.endpoint;
     final removed = await sub.unsubscribe();
     if (!removed) return false;
 
-    final stillSubscribed = await pushManager.getSubscription();
+    final stillSubscribed = await _safeGetSubscription(pushManager);
     if (stillSubscribed != null) return false;
 
     if (endpoint == null || endpoint.isEmpty) return true;
@@ -108,6 +108,21 @@ class PushServiceImpl implements PushService {
     }
   }
 
+  Future<html.PushSubscription?> _safeGetSubscription(
+    html.PushManager pushManager,
+  ) async {
+    if (!js_util.hasProperty(pushManager, 'getSubscription')) return null;
+    try {
+      final result = await js_util.promiseToFuture<dynamic>(
+        js_util.callMethod(pushManager, 'getSubscription', const []),
+      );
+      if (result is html.PushSubscription) return result;
+    } catch (_) {
+      return null;
+    }
+    return null;
+  }
+
   Future<bool> _sendSubscription(html.PushSubscription sub) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/push/subscribe');
 
@@ -117,7 +132,7 @@ class PushServiceImpl implements PushService {
         'p256dh': _encodeKey(sub.getKey('p256dh')),
         'auth': _encodeKey(sub.getKey('auth')),
       },
-      'content_encoding': 'aesgcm',
+      'content_encoding': _resolveContentEncoding(),
       'user_agent': html.window.navigator.userAgent,
     };
 
@@ -176,5 +191,20 @@ class PushServiceImpl implements PushService {
       return base64UrlEncode(key);
     }
     return '';
+  }
+
+  String _resolveContentEncoding() {
+    try {
+      final ctor = js_util.getProperty(html.window, 'PushManager');
+      final encodings = js_util.getProperty(ctor, 'supportedContentEncodings');
+      final list = js_util.dartify(encodings);
+      if (list is List && list.isNotEmpty) {
+        final value = list.first?.toString();
+        if (value != null && value.isNotEmpty) return value;
+      }
+    } catch (_) {
+      // ignore
+    }
+    return 'aes128gcm';
   }
 }

@@ -23,7 +23,7 @@ class ApiConfig {
         return 'https://api.peladadochori.com/api';
       case Environment.dev:
       default:
-        return 'http://localhost:8000/api';
+        return 'http://pelada-chori.local/api';
     }
   }
 }
